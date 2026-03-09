@@ -1,0 +1,20 @@
+# Requirements for Purview Audit Log Analyzer
+
+# ============================================
+# MANUAL WORKFLOW (RECOMMENDED)
+# ============================================
+# No dependencies needed! The core tools work out of the box:
+# - parse_purview_audit_log.py (no dependencies)
+# - dashboard.html (runs in browser, no installation)
+
+# Just need Python 3.6+ (already on most systems)
+
+# ============================================
+# ADVANCED: API AUTOMATION (OPTIONAL)
+# ============================================
+# Only install these if you want to use download_audit_logs.py
+# for automated API-based downloads (requires Azure AD app setup)
+
+# Uncomment below if using download_audit_logs.py:
+# msal>=1.24.0
+# requests>=2.31.0

@@ -72,7 +72,9 @@
             <!-- =================================
                  EXECUTIVE SUMMARY TAB
                  ================================= -->
-            <div class="tab-content" x-show="$store.dashboard.currentTab === 'summary'">
+            <div class="tab-content"
+                 x-show="$store.dashboard.currentTab === 'summary'"
+                 x-init="$watch('$store.dashboard.reportData', value => { if (value && $store.dashboard.currentTab === 'summary') { setTimeout(() => $store.dashboard.initializeCharts(), 100) } })">
                 <div class="stats-grid">
                     <div class="stat-card">
                         <div class="stat-value" x-text="$store.dashboard.formatNumber($store.dashboard.reportData?.metadata.total_operations || 0)"></div>

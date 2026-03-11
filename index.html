@@ -8,398 +8,361 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script src="dashboard.js"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 </head>
-<body x-data x-cloak>
-    <!-- Header -->
-    <header>
+<body>
+    <div id="app" v-cloak>
+        <!-- Header -->
+        <header>
+            <div class="container">
+                <h1>Purview Audit Report Dashboard</h1>
+                <div class="subtitle">{{ dateRangeText() }}</div>
+            </div>
+        </header>
+
         <div class="container">
-            <h1>Purview Audit Report Dashboard</h1>
-            <div class="subtitle"
-                 x-text="$store.dashboard.reportData
-                         ? `Report Period: ${$store.dashboard.formatDate($store.dashboard.reportData.metadata.date_range.start)} to ${$store.dashboard.formatDate($store.dashboard.reportData.metadata.date_range.end)} (${$store.dashboard.reportData.metadata.date_range.days} days)`
-                         : 'Loading report data...'">
+            <!-- Navigation Tabs -->
+            <div class="tabs" v-show="!loading">
+                <button class="tab" :class="{ 'active': currentTab === 'summary' }" @click="showTab('summary')">Executive Summary</button>
+                <button class="tab" :class="{ 'active': currentTab === 'sites' }" @click="showTab('sites')">Site Activity</button>
+                <button class="tab" :class="{ 'active': currentTab === 'users' }" @click="showTab('users')">User Activity</button>
+                <button class="tab" :class="{ 'active': currentTab === 'access-types' }" @click="showTab('access-types')">Access Types</button>
+                <button class="tab" :class="{ 'active': currentTab === 'applications' }" @click="showTab('applications')">Applications</button>
+                <button class="tab" :class="{ 'active': currentTab === 'timeline' }" @click="showTab('timeline')">Timeline</button>
             </div>
-        </div>
-    </header>
 
-    <div class="container">
-        <!-- Navigation Tabs -->
-        <div class="tabs" x-show="!$store.dashboard.loading">
-            <button class="tab"
-                    :class="{ 'active': $store.dashboard.currentTab === 'summary' }"
-                    @click="$store.dashboard.showTab('summary')">Executive Summary</button>
-            <button class="tab"
-                    :class="{ 'active': $store.dashboard.currentTab === 'sites' }"
-                    @click="$store.dashboard.showTab('sites')">Site Activity</button>
-            <button class="tab"
-                    :class="{ 'active': $store.dashboard.currentTab === 'users' }"
-                    @click="$store.dashboard.showTab('users')">User Activity</button>
-            <button class="tab"
-                    :class="{ 'active': $store.dashboard.currentTab === 'access-types' }"
-                    @click="$store.dashboard.showTab('access-types')">Access Types</button>
-            <button class="tab"
-                    :class="{ 'active': $store.dashboard.currentTab === 'applications' }"
-                    @click="$store.dashboard.showTab('applications')">Applications</button>
-            <button class="tab"
-                    :class="{ 'active': $store.dashboard.currentTab === 'timeline' }"
-                    @click="$store.dashboard.showTab('timeline')">Timeline</button>
-        </div>
-
-        <!-- Loading State -->
-        <div id="loading" class="loading" x-show="$store.dashboard.loading">
-            <div class="loading-content">
-                <h2 class="loading-title">Load File Access Data</h2>
-                <p class="loading-description">
-                    Select the CSV file from <strong>parse_purview_audit_log.py</strong><br>
-                    (e.g., audit_file_access_report.csv)
-                </p>
-                <input type="file" id="fileInput" accept=".csv" class="hidden" @change="handleFileSelect($event)">
-                <button class="btn btn-primary file-input-btn" @click="$el.previousElementSibling.click()">
-                    📂 Select CSV File
-                </button>
-                <p class="loading-note">
-                    <strong>Note:</strong> You no longer need to run generate_report_data.py!<br>
-                    The dashboard will analyze the CSV directly in your browser.
-                </p>
-            </div>
-        </div>
-
-        <!-- Dashboard Content -->
-        <div x-show="!$store.dashboard.loading" x-cloak>
-
-            <!-- =================================
-                 EXECUTIVE SUMMARY TAB
-                 ================================= -->
-            <div class="tab-content"
-                 x-show="$store.dashboard.currentTab === 'summary'"
-                 x-init="$watch('$store.dashboard.reportData', value => { if (value && $store.dashboard.currentTab === 'summary') { setTimeout(() => $store.dashboard.initializeCharts(), 100) } })">
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-value" x-text="$store.dashboard.formatNumber($store.dashboard.reportData?.metadata.total_operations || 0)"></div>
-                        <div class="stat-label">Total File Operations</div>
-                    </div>
-                    <div class="stat-card green">
-                        <div class="stat-value" x-text="$store.dashboard.formatNumber($store.dashboard.reportData?.metadata.unique_users || 0)"></div>
-                        <div class="stat-label">Unique Users</div>
-                    </div>
-                    <div class="stat-card orange">
-                        <div class="stat-value" x-text="$store.dashboard.formatNumber($store.dashboard.reportData?.metadata.unique_sites || 0)"></div>
-                        <div class="stat-label">Unique Sites</div>
-                    </div>
-                    <div class="stat-card red">
-                        <div class="stat-value" x-text="$store.dashboard.formatNumber($store.dashboard.reportData?.metadata.unique_files || 0)"></div>
-                        <div class="stat-label">Unique Files</div>
-                    </div>
-                </div>
-
-                <div class="chart-row">
-                    <div class="card">
-                        <div class="card-header">Top 10 Most Active Sites</div>
-                        <div class="chart-container">
-                            <canvas id="topSitesChart"></canvas>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <div class="card-header">Top 10 Most Active Users</div>
-                        <div class="chart-container">
-                            <canvas id="topUsersChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="chart-row">
-                    <div class="card">
-                        <div class="card-header">Access Type Distribution</div>
-                        <div class="chart-container">
-                            <canvas id="accessTypeChart"></canvas>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <div class="card-header">Top File Types</div>
-                        <div class="chart-container">
-                            <canvas id="fileTypeChart"></canvas>
-                        </div>
-                    </div>
+            <!-- Loading State -->
+            <div id="loading" class="loading" v-show="loading">
+                <div class="loading-content">
+                    <h2 class="loading-title">Load File Access Data</h2>
+                    <p class="loading-description">
+                        Select the CSV file from <strong>parse_purview_audit_log.py</strong><br>
+                        (e.g., audit_file_access_report.csv)
+                    </p>
+                    <input type="file" ref="fileInput" accept=".csv" class="hidden" @change="handleFileSelect($event)">
+                    <button class="btn btn-primary file-input-btn" @click="$refs.fileInput.click()">
+                        📂 Select CSV File
+                    </button>
+                    <p class="loading-note">
+                        <strong>Note:</strong> You no longer need to run generate_report_data.py!<br>
+                        The dashboard will analyze the CSV directly in your browser.
+                    </p>
                 </div>
             </div>
 
-            <!-- =================================
-                 SITE ACTIVITY TAB
-                 ================================= -->
-            <div class="tab-content" x-show="$store.dashboard.currentTab === 'sites'">
-                <!-- Site List View -->
-                <div class="card" x-show="$store.dashboard.siteDetailIndex === null">
-                    <div class="card-header">Site Activity Overview</div>
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Site</th>
-                                <th>Operations</th>
-                                <th>Users</th>
-                                <th>Files</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template x-for="(site, index) in $store.dashboard.reportData?.site_activity || []" :key="index">
-                                <tr class="clickable" @click="$store.dashboard.showSiteDetail(index)">
-                                    <td x-text="$store.dashboard.extractSiteName(site.site_url)"></td>
-                                    <td x-text="$store.dashboard.formatNumber(site.total_operations)"></td>
-                                    <td x-text="$store.dashboard.formatNumber(site.unique_users)"></td>
-                                    <td x-text="$store.dashboard.formatNumber(site.unique_files)"></td>
-                                </tr>
-                            </template>
-                        </tbody>
-                    </table>
-                </div>
+            <!-- Dashboard Content -->
+            <div v-if="!loading">
 
-                <!-- Site Detail View -->
-                <template x-if="$store.dashboard.siteDetailIndex !== null">
-                    <div class="card">
-                        <div class="card-header">
-                            <button class="btn btn-secondary" @click="$store.dashboard.closeSiteDetail()">
-                                ← Back to Sites
-                            </button>
-                            <span class="detail-title"
-                                  x-text="$store.dashboard.extractSiteName($store.dashboard.reportData.site_activity[$store.dashboard.siteDetailIndex].site_url)"></span>
+                <!-- Executive Summary Tab -->
+                <div class="tab-content" v-if="currentTab === 'summary'">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value">{{ formatNumber(reportData?.metadata.total_operations || 0) }}</div>
+                            <div class="stat-label">Total File Operations</div>
                         </div>
-                        <div x-data="{ site: $store.dashboard.reportData.site_activity[$store.dashboard.siteDetailIndex] }">
-                            <div class="stats-grid mb-30">
-                                <div class="stat-card">
-                                    <div class="stat-value" x-text="$store.dashboard.formatNumber(site.total_operations)"></div>
-                                    <div class="stat-label">Total Operations</div>
-                                </div>
-                                <div class="stat-card green">
-                                    <div class="stat-value" x-text="$store.dashboard.formatNumber(site.unique_users)"></div>
-                                    <div class="stat-label">Unique Users</div>
-                                </div>
-                                <div class="stat-card orange">
-                                    <div class="stat-value" x-text="$store.dashboard.formatNumber(site.unique_files)"></div>
-                                    <div class="stat-label">Unique Files</div>
-                                </div>
-                                <div class="stat-card red">
-                                    <div class="stat-value" x-text="site.file_types[0]?.type.toUpperCase() || 'N/A'"></div>
-                                    <div class="stat-label">Top File Type</div>
-                                </div>
+                        <div class="stat-card green">
+                            <div class="stat-value">{{ formatNumber(reportData?.metadata.unique_users || 0) }}</div>
+                            <div class="stat-label">Unique Users</div>
+                        </div>
+                        <div class="stat-card orange">
+                            <div class="stat-value">{{ formatNumber(reportData?.metadata.unique_sites || 0) }}</div>
+                            <div class="stat-label">Unique Sites</div>
+                        </div>
+                        <div class="stat-card red">
+                            <div class="stat-value">{{ formatNumber(reportData?.metadata.unique_files || 0) }}</div>
+                            <div class="stat-label">Unique Files</div>
+                        </div>
+                    </div>
+
+                    <div class="chart-row">
+                        <div class="card">
+                            <div class="card-header">Top 10 Most Active Sites</div>
+                            <div class="chart-container">
+                                <canvas id="topSitesChart"></canvas>
                             </div>
-
-                            <div class="card mb-30">
-                                <div class="card-header" x-text="`All Users (${site.top_users.length} Total)`"></div>
-                                <table class="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>User</th>
-                                            <th>Operations</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <template x-for="user in site.top_users.slice(0, 20)" :key="user.user">
-                                            <tr>
-                                                <td x-text="user.user"></td>
-                                                <td x-text="$store.dashboard.formatNumber(user.operations)"></td>
-                                            </tr>
-                                        </template>
-                                    </tbody>
-                                </table>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">Top 10 Most Active Users</div>
+                            <div class="chart-container">
+                                <canvas id="topUsersChart"></canvas>
                             </div>
                         </div>
                     </div>
-                </template>
-            </div>
 
-            <!-- =================================
-                 USER ACTIVITY TAB
-                 ================================= -->
-            <div class="tab-content" x-show="$store.dashboard.currentTab === 'users'">
-                <!-- User List View -->
-                <div class="card" x-show="$store.dashboard.userDetailIndex === null">
-                    <div class="card-header">User Activity Overview</div>
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>User</th>
-                                <th>Operations</th>
-                                <th>Sites</th>
-                                <th>Files</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template x-for="(user, index) in $store.dashboard.reportData?.user_activity || []" :key="index">
-                                <tr class="clickable" @click="$store.dashboard.showUserDetail(index)">
-                                    <td x-text="user.user_id"></td>
-                                    <td x-text="$store.dashboard.formatNumber(user.total_operations)"></td>
-                                    <td x-text="$store.dashboard.formatNumber(user.unique_sites)"></td>
-                                    <td x-text="$store.dashboard.formatNumber(user.unique_files)"></td>
-                                </tr>
-                            </template>
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- User Detail View -->
-                <template x-if="$store.dashboard.userDetailIndex !== null">
-                    <div class="card">
-                        <div class="card-header">
-                            <button class="btn btn-secondary" @click="$store.dashboard.closeUserDetail()">
-                                ← Back to Users
-                            </button>
-                            <span class="detail-title"
-                                  x-text="$store.dashboard.reportData.user_activity[$store.dashboard.userDetailIndex].user_id"></span>
-                        </div>
-                        <div x-data="{ user: $store.dashboard.reportData.user_activity[$store.dashboard.userDetailIndex] }">
-                            <div class="stats-grid mb-30">
-                                <div class="stat-card">
-                                    <div class="stat-value" x-text="$store.dashboard.formatNumber(user.total_operations)"></div>
-                                    <div class="stat-label">Total Operations</div>
-                                </div>
-                                <div class="stat-card green">
-                                    <div class="stat-value" x-text="$store.dashboard.formatNumber(user.unique_sites)"></div>
-                                    <div class="stat-label">Sites Accessed</div>
-                                </div>
-                                <div class="stat-card orange">
-                                    <div class="stat-value" x-text="$store.dashboard.formatNumber(user.unique_files)"></div>
-                                    <div class="stat-label">Unique Files</div>
-                                </div>
-                                <div class="stat-card red">
-                                    <div class="stat-value" x-text="user.access_types[0]?.type || 'N/A'"></div>
-                                    <div class="stat-label">Top Access Type</div>
-                                </div>
+                    <div class="chart-row">
+                        <div class="card">
+                            <div class="card-header">Access Type Distribution</div>
+                            <div class="chart-container">
+                                <canvas id="accessTypeChart"></canvas>
                             </div>
-
-                            <div class="card mb-30">
-                                <div class="card-header" x-text="`All Sites (${user.top_sites.length} Total)`"></div>
-                                <table class="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Site</th>
-                                            <th>Operations</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <template x-for="site in user.top_sites.slice(0, 20)" :key="site.site">
-                                            <tr>
-                                                <td x-text="$store.dashboard.extractSiteName(site.site)"></td>
-                                                <td x-text="$store.dashboard.formatNumber(site.operations)"></td>
-                                            </tr>
-                                        </template>
-                                    </tbody>
-                                </table>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">Top File Types</div>
+                            <div class="chart-container">
+                                <canvas id="fileTypeChart"></canvas>
                             </div>
                         </div>
                     </div>
-                </template>
-            </div>
+                </div>
 
-            <!-- =================================
-                 ACCESS TYPES TAB
-                 ================================= -->
-            <div class="tab-content" x-show="$store.dashboard.currentTab === 'access-types'">
-                <div class="card">
-                    <div class="card-header">Access Type Analysis</div>
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Access Type</th>
-                                <th>Count</th>
-                                <th>Users</th>
-                                <th>Sites</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template x-for="type in $store.dashboard.reportData?.access_types || []" :key="type.type">
+                <!-- Site Activity Tab -->
+                <div class="tab-content" v-show="currentTab === 'sites'">
+                    <div class="card" v-show="siteDetailIndex === null">
+                        <div class="card-header">Site Activity Overview</div>
+                        <table class="data-table">
+                            <thead>
                                 <tr>
-                                    <td><strong x-text="type.type"></strong></td>
-                                    <td x-text="$store.dashboard.formatNumber(type.count)"></td>
-                                    <td x-text="$store.dashboard.formatNumber(type.unique_users)"></td>
-                                    <td x-text="$store.dashboard.formatNumber(type.unique_sites)"></td>
+                                    <th>Site</th>
+                                    <th>Operations</th>
+                                    <th>Users</th>
+                                    <th>Files</th>
                                 </tr>
-                            </template>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- =================================
-                 APPLICATIONS TAB
-                 ================================= -->
-            <div class="tab-content" x-show="$store.dashboard.currentTab === 'applications'">
-                <div class="card">
-                    <div class="card-header">Application Usage Analysis</div>
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Application</th>
-                                <th>Count</th>
-                                <th>Users</th>
-                                <th>Sites</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template x-for="app in $store.dashboard.reportData?.applications || []" :key="app.application">
-                                <tr>
-                                    <td><strong x-text="app.application"></strong></td>
-                                    <td x-text="$store.dashboard.formatNumber(app.count)"></td>
-                                    <td x-text="$store.dashboard.formatNumber(app.unique_users)"></td>
-                                    <td x-text="$store.dashboard.formatNumber(app.unique_sites)"></td>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(site, index) in reportData?.site_activity || []" :key="index"
+                                    class="clickable" @click="showSiteDetail(index)">
+                                    <td>{{ extractSiteName(site.site_url) }}</td>
+                                    <td>{{ formatNumber(site.total_operations) }}</td>
+                                    <td>{{ formatNumber(site.unique_users) }}</td>
+                                    <td>{{ formatNumber(site.unique_files) }}</td>
                                 </tr>
-                            </template>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                            </tbody>
+                        </table>
+                    </div>
 
-            <!-- =================================
-                 TIMELINE TAB
-                 ================================= -->
-            <div class="tab-content" x-show="$store.dashboard.currentTab === 'timeline'">
-                <div class="card">
-                    <div class="card-header">Activity Timeline</div>
-                    <div class="card-subheader">Daily file operations over the reporting period</div>
-                    <div class="chart-container timeline-chart">
-                        <canvas id="timelineChart"></canvas>
+                    <div class="card" v-if="siteDetailIndex !== null && reportData">
+                        <div class="card-header">
+                            <button class="btn btn-secondary" @click="closeSiteDetail()">← Back to Sites</button>
+                            <span class="detail-title">{{ extractSiteName(reportData.site_activity[siteDetailIndex].site_url) }}</span>
+                        </div>
+                        <div class="stats-grid mb-30">
+                            <div class="stat-card">
+                                <div class="stat-value">{{ formatNumber(reportData.site_activity[siteDetailIndex].total_operations) }}</div>
+                                <div class="stat-label">Total Operations</div>
+                            </div>
+                            <div class="stat-card green">
+                                <div class="stat-value">{{ formatNumber(reportData.site_activity[siteDetailIndex].unique_users) }}</div>
+                                <div class="stat-label">Unique Users</div>
+                            </div>
+                            <div class="stat-card orange">
+                                <div class="stat-value">{{ formatNumber(reportData.site_activity[siteDetailIndex].unique_files) }}</div>
+                                <div class="stat-label">Unique Files</div>
+                            </div>
+                            <div class="stat-card red">
+                                <div class="stat-value">{{ reportData.site_activity[siteDetailIndex].file_types[0]?.type.toUpperCase() || 'N/A' }}</div>
+                                <div class="stat-label">Top File Type</div>
+                            </div>
+                        </div>
+                        <div class="card mb-30">
+                            <div class="card-header">All Users ({{ reportData.site_activity[siteDetailIndex].top_users.length }} Total)</div>
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>User</th>
+                                        <th>Operations</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="user in reportData.site_activity[siteDetailIndex].top_users.slice(0, 20)" :key="user.user">
+                                        <td>{{ user.user }}</td>
+                                        <td>{{ formatNumber(user.operations) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="card mb-30">
+                            <div class="card-header">
+                                File Structure ({{ reportData.site_activity[siteDetailIndex].top_files.length }} Files Total)
+                            </div>
+                            <div class="file-tree" v-html="renderFileTree(
+                                buildFileTree(reportData.site_activity[siteDetailIndex].top_files),
+                                0,
+                                'site',
+                                reportData.site_activity[siteDetailIndex].file_details,
+                                ''
+                            )"></div>
+                        </div>
                     </div>
                 </div>
-            </div>
 
+                <!-- User Activity Tab -->
+                <div class="tab-content" v-show="currentTab === 'users'">
+                    <div class="card" v-show="userDetailIndex === null">
+                        <div class="card-header">User Activity Overview</div>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Operations</th>
+                                    <th>Sites</th>
+                                    <th>Files</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(user, index) in reportData?.user_activity || []" :key="index"
+                                    class="clickable" @click="showUserDetail(index)">
+                                    <td>{{ user.user_id }}</td>
+                                    <td>{{ formatNumber(user.total_operations) }}</td>
+                                    <td>{{ formatNumber(user.unique_sites) }}</td>
+                                    <td>{{ formatNumber(user.unique_files) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="card" v-if="userDetailIndex !== null && reportData">
+                        <div class="card-header">
+                            <button class="btn btn-secondary" @click="closeUserDetail()">← Back to Users</button>
+                            <span class="detail-title">{{ reportData.user_activity[userDetailIndex].user_id }}</span>
+                        </div>
+                        <div class="stats-grid mb-30">
+                            <div class="stat-card">
+                                <div class="stat-value">{{ formatNumber(reportData.user_activity[userDetailIndex].total_operations) }}</div>
+                                <div class="stat-label">Total Operations</div>
+                            </div>
+                            <div class="stat-card green">
+                                <div class="stat-value">{{ formatNumber(reportData.user_activity[userDetailIndex].unique_sites) }}</div>
+                                <div class="stat-label">Sites Accessed</div>
+                            </div>
+                            <div class="stat-card orange">
+                                <div class="stat-value">{{ formatNumber(reportData.user_activity[userDetailIndex].unique_files) }}</div>
+                                <div class="stat-label">Unique Files</div>
+                            </div>
+                            <div class="stat-card red">
+                                <div class="stat-value">{{ reportData.user_activity[userDetailIndex].access_types[0]?.type || 'N/A' }}</div>
+                                <div class="stat-label">Top Access Type</div>
+                            </div>
+                        </div>
+                        <div class="card mb-30">
+                            <div class="card-header">All Sites ({{ reportData.user_activity[userDetailIndex].top_sites.length }} Total)</div>
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Site</th>
+                                        <th>Operations</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="site in reportData.user_activity[userDetailIndex].top_sites.slice(0, 20)" :key="site.site">
+                                        <td>{{ extractSiteName(site.site) }}</td>
+                                        <td>{{ formatNumber(site.operations) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="card mb-30">
+                            <div class="card-header">
+                                File Structure ({{ reportData.user_activity[userDetailIndex].top_files.length }} Files Total)
+                            </div>
+                            <div class="file-tree" v-html="renderFileTree(
+                                buildFileTree(reportData.user_activity[userDetailIndex].top_files),
+                                0,
+                                'user',
+                                reportData.user_activity[userDetailIndex].file_details,
+                                ''
+                            )"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Access Types Tab -->
+                <div class="tab-content" v-show="currentTab === 'access-types'">
+                    <div class="card">
+                        <div class="card-header">Access Type Analysis</div>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Access Type</th>
+                                    <th>Count</th>
+                                    <th>Users</th>
+                                    <th>Sites</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="type in reportData?.access_types || []" :key="type.type">
+                                    <td><strong>{{ type.type }}</strong></td>
+                                    <td>{{ formatNumber(type.count) }}</td>
+                                    <td>{{ formatNumber(type.unique_users) }}</td>
+                                    <td>{{ formatNumber(type.unique_sites) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Applications Tab -->
+                <div class="tab-content" v-show="currentTab === 'applications'">
+                    <div class="card">
+                        <div class="card-header">Application Usage Analysis</div>
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Application</th>
+                                    <th>Count</th>
+                                    <th>Users</th>
+                                    <th>Sites</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="app in reportData?.applications || []" :key="app.application">
+                                    <td><strong>{{ app.application }}</strong></td>
+                                    <td>{{ formatNumber(app.count) }}</td>
+                                    <td>{{ formatNumber(app.unique_users) }}</td>
+                                    <td>{{ formatNumber(app.unique_sites) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Timeline Tab -->
+                <div class="tab-content" v-show="currentTab === 'timeline'">
+                    <div class="card">
+                        <div class="card-header">Activity Timeline</div>
+                        <div class="card-subheader">Daily file operations over the reporting period</div>
+                        <div class="chart-container timeline-chart">
+                            <canvas id="timelineChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
         </div>
-    </div>
 
-    <!-- Export Controls -->
-    <div class="export-controls" x-show="!$store.dashboard.loading">
-        <button class="btn btn-primary" @click="exportToPDF()">
-            📄 Export to PDF
-        </button>
-    </div>
+        <!-- Export Controls -->
+        <div class="export-controls" v-show="!loading">
+            <button class="btn btn-primary" @click="exportToPDF()">
+                📄 Export to PDF
+            </button>
+        </div>
 
-    <!-- Modal -->
-    <div class="modal" :class="{ 'active': $store.dashboard.modalOpen }" @click.self="$store.dashboard.closeModal()">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2 x-text="$store.dashboard.modalTitle"></h2>
-                <button class="modal-close" @click="$store.dashboard.closeModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <template x-if="$store.dashboard.modalUsers.length === 0">
-                    <p class="text-center" style="color: var(--text-secondary);">No users found</p>
-                </template>
-                <template x-if="$store.dashboard.modalUsers.length > 0">
-                    <div>
+        <!-- Modal -->
+        <div class="modal" :class="{ 'active': modalOpen }" @click.self="closeModal()">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>{{ modalTitle }}</h2>
+                    <button class="modal-close" @click="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p v-if="modalUsers.length === 0" class="text-center" style="color: var(--text-secondary);">No users found</p>
+                    <div v-if="modalUsers.length > 0">
                         <div style="margin-bottom: 15px; color: var(--text-secondary);">
-                            <strong x-text="$store.dashboard.modalUsers.length"></strong> <span x-text="$store.dashboard.modalUsers.length !== 1 ? 'users' : 'user'"></span>
-                            • <strong x-text="$store.dashboard.formatNumber($store.dashboard.modalUsers.reduce((sum, u) => sum + u.operations, 0))"></strong> total operations
+                            <strong>{{ modalUsers.length }}</strong> {{ modalUsers.length !== 1 ? 'users' : 'user' }}
+                            • <strong>{{ formatNumber(modalUsers.reduce((sum, u) => sum + u.operations, 0)) }}</strong> total operations
                         </div>
-                        <template x-for="user in $store.dashboard.modalUsers" :key="user.user">
-                            <div class="user-list-item">
-                                <span class="user-name">👤 <span x-text="user.user"></span></span>
-                                <span class="user-ops"><span x-text="$store.dashboard.formatNumber(user.operations)"></span> ops</span>
-                            </div>
-                        </template>
+                        <div v-for="user in modalUsers" :key="user.user" class="user-list-item">
+                            <span class="user-name">👤 {{ user.user }}</span>
+                            <span class="user-ops">{{ formatNumber(user.operations) }} ops</span>
+                        </div>
                     </div>
-                </template>
+                </div>
             </div>
         </div>
+
     </div>
 
+    <script src="dashboard.js"></script>
 </body>
 </html>

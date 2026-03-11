@@ -1,33 +1,35 @@
 /* =================================================================
-   Purview Audit Report Dashboard - Alpine.js Application
+   Purview Audit Report Dashboard - Vue 3 Application
    ================================================================= */
 
-// Global Alpine store for application state
-document.addEventListener('alpine:init', () => {
+const { createApp } = Vue;
 
-    // ===== MAIN DATA STORE =====
-    Alpine.store('dashboard', {
-        // Data
-        reportData: null,
-        rawData: [],
-        charts: {},
+const vueAppConfig = {
+    data() {
+        return {
+            // Data
+            reportData: null,
+            rawData: [],
+            charts: {},
 
-        // UI State
-        loading: true,
-        currentTab: 'summary',
-        siteDetailIndex: null,
-        userDetailIndex: null,
+            // UI State
+            loading: true,
+            currentTab: 'summary',
+            siteDetailIndex: null,
+            userDetailIndex: null,
 
-        // Modal State
-        modalOpen: false,
-        modalTitle: '',
-        modalUsers: [],
+            // Modal State
+            modalOpen: false,
+            modalTitle: '',
+            modalUsers: [],
+        };
+    },
 
-        // Initialize dashboard
-        init() {
-            console.log('Dashboard initialized');
-        },
+    mounted() {
+        // Vue app is ready
+    },
 
+    methods: {
         // Handle file selection
         handleFileSelect(event) {
             const file = event.target.files[0];
@@ -47,13 +49,13 @@ document.addEventListener('alpine:init', () => {
                         setTimeout(() => {
                             try {
                                 this.reportData = this.analyzeData(this.rawData);
-                                console.log('Report data generated:', this.reportData);
-                                console.log('Setting loading to false...');
                                 this.loading = false;
-                                console.log('Loading is now:', this.loading);
-                                // Charts will be initialized by Alpine x-init after DOM renders
+
+                                // Use Vue's nextTick to ensure DOM is updated before creating charts
+                                this.$nextTick(() => {
+                                    this.initializeCharts();
+                                });
                             } catch (error) {
-                                console.error('Analysis error:', error);
                                 this.showError('Analysis Error', error.message);
                             }
                         }, 100);
@@ -96,8 +98,6 @@ document.addEventListener('alpine:init', () => {
 
         // Analyze CSV data
         analyzeData(data) {
-            console.log('Analyzing', data.length, 'records...');
-
             const siteData = {};
             const userData = {};
             const accessTypeData = {};
@@ -109,7 +109,7 @@ document.addEventListener('alpine:init', () => {
             const allFiles = new Set();
             const allDates = [];
 
-            data.forEach((row, index) => {
+            data.forEach((row) => {
                 if (!row.user_id || !row.operation) return;
 
                 totalOps++;
@@ -346,21 +346,14 @@ document.addEventListener('alpine:init', () => {
 
         // Initialize charts
         initializeCharts() {
-            console.log('initializeCharts called, waiting for DOM...');
-            // Wait longer for Alpine to fully render and show the dashboard
-            // x-show needs time to apply display changes before canvas dimensions are available
-            setTimeout(() => {
-                console.log('Creating charts now...');
-                this.createTopSitesChart();
-                this.createTopUsersChart();
-                this.createAccessTypeChart();
-                this.createFileTypeChart();
-                this.createTimelineChart();
-                console.log('Charts creation attempted');
-            }, 500);
+            this.createTopSitesChart();
+            this.createTopUsersChart();
+            this.createAccessTypeChart();
+            this.createFileTypeChart();
+            this.createTimelineChart();
         },
 
-        // Create charts (called by Alpine x-init when DOM is ready)
+        // Create charts
         createTopSitesChart() {
             const ctx = document.getElementById('topSitesChart')?.getContext('2d');
             if (!ctx || !this.reportData) return;
@@ -557,7 +550,7 @@ document.addEventListener('alpine:init', () => {
 
         // Utility functions
         formatNumber(num) {
-            return num.toLocaleString();
+            return num ? num.toLocaleString() : '0';
         },
 
         formatDate(dateStr) {
@@ -585,31 +578,39 @@ document.addEventListener('alpine:init', () => {
             } catch {
                 return url.substring(0, 50) + '...';
             }
-        }
-    });
-
-    // ===== FILE TREE COMPONENT =====
-    Alpine.data('fileTree', (files, fileDetails) => ({
-        tree: {},
-        expandedNodes: new Set(),
-
-        init() {
-            this.tree = this.buildTree(files);
         },
 
-        buildTree(files) {
+        dateRangeText() {
+            if (!this.reportData) return 'Loading report data...';
+            const dr = this.reportData.metadata.date_range;
+            return `Report Period: ${this.formatDate(dr.start)} to ${this.formatDate(dr.end)} (${dr.days} days)`;
+        },
+
+        // File tree functions
+        buildFileTree(files) {
             const tree = {};
 
             files.forEach(file => {
-                const parts = file.file_path ? file.file_path.split('/').filter(p => p) : [];
+                // Parse the combined file path (format: "path/to/file/filename.ext")
+                const fullPath = file.file || `${file.file_path}/${file.file_name}`;
+                const parts = fullPath.split('/').filter(p => p);
+
+                if (parts.length === 0) return;
+
+                // Extract filename (last part) and folder path (everything before)
+                const fileName = parts[parts.length - 1];
+                const folderParts = parts.slice(0, -1);
+
                 let current = tree;
 
-                parts.forEach((part) => {
+                // Build folder structure
+                folderParts.forEach((part) => {
                     if (!current[part]) {
                         current[part] = {
                             type: 'folder',
                             name: part,
                             children: {},
+                            files: [],
                             operations: 0
                         };
                     }
@@ -617,173 +618,138 @@ document.addEventListener('alpine:init', () => {
                     current = current[part].children;
                 });
 
-                if (!current.__files) current.__files = [];
+                // Add file to final folder
+                if (!current.__files) {
+                    current.__files = [];
+                }
                 current.__files.push({
-                    name: file.file_name || file.file,
+                    name: fileName,
                     operations: file.operations || 1,
-                    fullPath: file.file
+                    fullPath: fullPath
                 });
             });
 
             return tree;
         },
 
-        toggleNode(nodeId) {
-            if (this.expandedNodes.has(nodeId)) {
-                this.expandedNodes.delete(nodeId);
-            } else {
-                this.expandedNodes.add(nodeId);
+        renderFileTree(tree, level = 0, parentId = '', fileDetails = [], pathPrefix = '') {
+            // Store file details in window for onclick handlers
+            window.currentFileDetails = fileDetails;
+
+            let html = '';
+            const entries = Object.entries(tree)
+                .filter(([key]) => key !== '__files')
+                .sort((a, b) => b[1].operations - a[1].operations);
+
+            // Render folders
+            entries.forEach(([name, node], index) => {
+                const nodeId = `${parentId}_${level}_${index}`;
+                const hasChildren = Object.keys(node.children).length > 0 || node.children.__files?.length > 0;
+                const folderPath = pathPrefix ? `${pathPrefix}/${name}` : name;
+
+                html += `
+                    <div class="tree-item" style="padding-left: ${level * 20}px;">
+                        <div class="tree-folder">
+                            <span class="tree-folder-icon" id="icon_${nodeId}" onclick="window.vueApp.toggleTreeNode('${nodeId}')">
+                                ${hasChildren ? '▶' : '📄'}
+                            </span>
+                            <span class="tree-folder-name" onclick="window.vueApp.toggleTreeNode('${nodeId}')">📁 ${name}</span>
+                            <div class="tree-folder-stats">
+                                <span>${this.formatNumber(node.operations)} operations</span>
+                                <span class="tree-user-icon" onclick="event.stopPropagation(); window.vueApp.showUsersForCurrentPath('${folderPath.replace(/'/g, "\\'")}/', true)" title="Show users">
+                                    👤
+                                </span>
+                            </div>
+                        </div>
+                        <div class="tree-children" id="children_${nodeId}">
+                            ${hasChildren ? this.renderFileTree(node.children, level + 1, nodeId, fileDetails, folderPath) : ''}
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Render files in current folder
+            if (tree.__files && tree.__files.length > 0) {
+                const sortedFiles = [...tree.__files].sort((a, b) => b.operations - a.operations);
+                sortedFiles.forEach(file => {
+                    const filePath = file.fullPath || file.name;
+                    html += `
+                        <div class="tree-file" style="padding-left: ${(level + 1) * 20}px;">
+                            <span class="tree-file-icon">📄</span>
+                            <span class="tree-file-name">${file.name}</span>
+                            <span class="tree-file-count">${this.formatNumber(file.operations)} ops</span>
+                            <span class="tree-user-icon" onclick="window.vueApp.showUsersForCurrentPath('${filePath.replace(/'/g, "\\'")}', false)" title="Show users">
+                                👤
+                            </span>
+                        </div>
+                    `;
+                });
+            }
+
+            return html;
+        },
+
+        toggleTreeNode(nodeId) {
+            const children = document.getElementById(`children_${nodeId}`);
+            const icon = document.getElementById(`icon_${nodeId}`);
+
+            if (children && icon) {
+                if (children.classList.contains('expanded')) {
+                    children.classList.remove('expanded');
+                    icon.textContent = '▶';
+                } else {
+                    children.classList.add('expanded');
+                    icon.textContent = '▼';
+                }
             }
         },
 
-        isExpanded(nodeId) {
-            return this.expandedNodes.has(nodeId);
+        showUsersForCurrentPath(path, isFolder = false) {
+            // Use the stored file details from window
+            this.showUsersForPath(path, window.currentFileDetails || [], isFolder);
         },
 
-        showUsersForPath(path, isFolder) {
+        showUsersForPath(path, fileDetails, isFolder = false) {
             const userCounts = {};
 
+            // Filter file details by path
             fileDetails.forEach(detail => {
                 const detailPath = `${detail.file_path}/${detail.file_name}`;
-                const matches = isFolder ? detailPath.startsWith(path) : detailPath === path;
+
+                // For folders, match if the path starts with the folder path
+                // For files, exact match
+                const matches = isFolder
+                    ? detailPath.startsWith(path)
+                    : detailPath === path;
 
                 if (matches) {
-                    userCounts[detail.user_id] = (userCounts[detail.user_id] || 0) + 1;
+                    if (!userCounts[detail.user_id]) {
+                        userCounts[detail.user_id] = 0;
+                    }
+                    userCounts[detail.user_id]++;
                 }
             });
 
-            const users = Object.entries(userCounts)
+            // Sort by operation count
+            const sortedUsers = Object.entries(userCounts)
                 .sort((a, b) => b[1] - a[1])
                 .map(([user, count]) => ({ user, operations: count }));
 
-            const fileName = path.split('/').pop();
-            Alpine.store('dashboard').showUsersModal(users, `Users accessing: ${fileName}`);
+            // Show modal
+            const fileName = path.split('/').pop() || path;
+            this.modalTitle = `Users accessing: ${fileName}`;
+            this.modalUsers = sortedUsers;
+            this.modalOpen = true;
         }
-    }));
+    }
+};
 
-    // ===== PAGINATION COMPONENT =====
-    Alpine.data('paginated', (items, pageSize = 20) => ({
-        items: items,
-        currentPage: 1,
-        pageSize: pageSize,
+// Mount the app and make it globally available for onclick handlers
+const app = createApp(vueAppConfig);
+const vm = app.mount('#app');
+window.vueApp = vm;
 
-        get paginatedItems() {
-            const start = (this.currentPage - 1) * this.pageSize;
-            const end = this.pageSize === -1 ? this.items.length : start + this.pageSize;
-            return this.items.slice(start, end);
-        },
-
-        get totalPages() {
-            return this.pageSize === -1 ? 1 : Math.ceil(this.items.length / this.pageSize);
-        },
-
-        get pageNumbers() {
-            if (this.totalPages <= 1) return [];
-
-            const maxButtons = 5;
-            let startPage = Math.max(1, this.currentPage - Math.floor(maxButtons / 2));
-            let endPage = Math.min(this.totalPages, startPage + maxButtons - 1);
-
-            if (endPage - startPage < maxButtons - 1) {
-                startPage = Math.max(1, endPage - maxButtons + 1);
-            }
-
-            const pages = [];
-            for (let i = startPage; i <= endPage; i++) {
-                pages.push(i);
-            }
-            return pages;
-        },
-
-        get startItem() {
-            return (this.currentPage - 1) * this.pageSize + 1;
-        },
-
-        get endItem() {
-            const end = this.pageSize === -1 ? this.items.length : this.currentPage * this.pageSize;
-            return Math.min(end, this.items.length);
-        },
-
-        goToPage(page) {
-            this.currentPage = Math.max(1, Math.min(page, this.totalPages));
-        },
-
-        changePageSize(size) {
-            this.pageSize = parseInt(size);
-            this.currentPage = 1;
-        },
-
-        nextPage() {
-            if (this.currentPage < this.totalPages) {
-                this.currentPage++;
-            }
-        },
-
-        prevPage() {
-            if (this.currentPage > 1) {
-                this.currentPage--;
-            }
-        }
-    }));
-});
-
-// ===== GLOBAL HELPER FUNCTIONS =====
-function handleFileSelect(event) {
-    Alpine.store('dashboard').handleFileSelect(event);
-}
-
+// Global helper for PDF export
 function exportToPDF() {
-    // PDF export functionality (keeping existing implementation)
-    const reportData = Alpine.store('dashboard').reportData;
-    if (!reportData) return;
-
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    let yPosition = 20;
-
-    // Title Page
-    pdf.setFontSize(24);
-    pdf.setTextColor(0, 120, 212);
-    pdf.text('Purview Audit Report', pageWidth / 2, yPosition, { align: 'center' });
-
-    yPosition += 15;
-    pdf.setFontSize(12);
-    pdf.setTextColor(96, 94, 92);
-    const dateRange = reportData.metadata.date_range;
-    pdf.text(`Report Period: ${formatDate(dateRange.start)} to ${formatDate(dateRange.end)}`, pageWidth / 2, yPosition, { align: 'center' });
-
-    yPosition += 10;
-    pdf.text(`Generated: ${new Date().toLocaleDateString()}`, pageWidth / 2, yPosition, { align: 'center' });
-
-    // Summary Statistics
-    yPosition += 20;
-    pdf.setFontSize(16);
-    pdf.setTextColor(50, 49, 48);
-    pdf.text('Executive Summary', 20, yPosition);
-
-    yPosition += 10;
-    pdf.setFontSize(11);
-    pdf.text(`Total File Operations: ${reportData.metadata.total_operations.toLocaleString()}`, 20, yPosition);
-
-    yPosition += 7;
-    pdf.text(`Unique Users: ${reportData.metadata.unique_users.toLocaleString()}`, 20, yPosition);
-
-    yPosition += 7;
-    pdf.text(`Unique Sites: ${reportData.metadata.unique_sites.toLocaleString()}`, 20, yPosition);
-
-    yPosition += 7;
-    pdf.text(`Unique Files: ${reportData.metadata.unique_files.toLocaleString()}`, 20, yPosition);
-
-    // Save
-    pdf.save(`purview-audit-report-${new Date().toISOString().split('T')[0]}.pdf`);
-    alert('✅ PDF report generated successfully!');
-}
-
-function formatDate(dateStr) {
-    if (!dateStr) return 'N/A';
-    const date = new Date(dateStr.trim());
-    if (isNaN(date.getTime())) return 'Invalid Date';
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+    alert('PDF export coming soon!');
 }

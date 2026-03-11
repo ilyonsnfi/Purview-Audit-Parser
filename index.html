@@ -9,6 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
 </head>
 <body>
     <div id="app" v-cloak>
@@ -54,7 +55,7 @@
             <div v-if="!loading">
 
                 <!-- Executive Summary Tab -->
-                <div class="tab-content" v-if="currentTab === 'summary'">
+                <div class="tab-content" v-show="currentTab === 'summary'">
                     <div class="stats-grid">
                         <div class="stat-card">
                             <div class="stat-value">{{ formatNumber(reportData?.metadata.total_operations || 0) }}</div>
@@ -97,9 +98,9 @@
                             </div>
                         </div>
                         <div class="card">
-                            <div class="card-header">Top File Types</div>
+                            <div class="card-header">Top 10 Applications</div>
                             <div class="chart-container">
-                                <canvas id="fileTypeChart"></canvas>
+                                <canvas id="topApplicationsChart"></canvas>
                             </div>
                         </div>
                     </div>
@@ -155,34 +156,36 @@
                         </div>
                         <div class="card mb-30">
                             <div class="card-header">All Users ({{ reportData.site_activity[siteDetailIndex].top_users.length }} Total)</div>
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>User</th>
-                                        <th>Operations</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="user in reportData.site_activity[siteDetailIndex].top_users.slice(0, 20)" :key="user.user">
-                                        <td>{{ user.user }}</td>
-                                        <td>{{ formatNumber(user.operations) }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                            <div v-html="renderUsersTable(reportData.site_activity[siteDetailIndex].top_users, 'siteActivity', 'users')"></div>
                         </div>
 
                         <div class="card mb-30">
                             <div class="card-header">
                                 File Structure ({{ reportData.site_activity[siteDetailIndex].top_files.length }} Files Total)
                             </div>
-                            <div class="file-tree" v-html="renderFileTree(
+                            <div class="file-tree" v-html="renderFileTreeWithSearch(
                                 buildFileTree(reportData.site_activity[siteDetailIndex].top_files),
-                                0,
+                                'siteActivity',
                                 'site',
-                                reportData.site_activity[siteDetailIndex].file_details,
-                                ''
+                                reportData.site_activity[siteDetailIndex].file_details
                             )"></div>
                         </div>
+
+                        <div class="card mb-30">
+                            <div class="card-header">
+                                <span>Access Types ({{ reportData.site_activity[siteDetailIndex].access_types.length }} Total)</span>
+                                <button class="btn btn-secondary" @click="showHumanReadableAccessTypes.siteActivity = !showHumanReadableAccessTypes.siteActivity" style="margin-left: auto;">
+                                    {{ showHumanReadableAccessTypes.siteActivity ? 'Show Raw' : 'Show Readable' }}
+                                </button>
+                            </div>
+                            <div v-html="renderAccessTypesTable(reportData.site_activity[siteDetailIndex].access_types, 'siteActivity', 'accessTypes', showHumanReadableAccessTypes.siteActivity)"></div>
+                        </div>
+
+                        <div class="card mb-30">
+                            <div class="card-header">Applications ({{ reportData.site_activity[siteDetailIndex].applications.length }} Total)</div>
+                            <div v-html="renderApplicationsTable(reportData.site_activity[siteDetailIndex].applications, 'siteActivity', 'applications')"></div>
+                        </div>
+
                     </div>
                 </div>
 
@@ -234,43 +237,45 @@
                                 <div class="stat-label">Top Access Type</div>
                             </div>
                         </div>
+
                         <div class="card mb-30">
-                            <div class="card-header">All Sites ({{ reportData.user_activity[userDetailIndex].top_sites.length }} Total)</div>
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Site</th>
-                                        <th>Operations</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="site in reportData.user_activity[userDetailIndex].top_sites.slice(0, 20)" :key="site.site">
-                                        <td>{{ extractSiteName(site.site) }}</td>
-                                        <td>{{ formatNumber(site.operations) }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                            <div class="card-header">
+                                Sites & Files ({{ reportData.user_activity[userDetailIndex].unique_sites }} Sites, {{ reportData.user_activity[userDetailIndex].top_files.length }} Files)
+                            </div>
+                            <div class="file-tree" v-html="renderFileTreeWithSearch(
+                                buildSiteFileTree(reportData.user_activity[userDetailIndex].file_details),
+                                'userActivity',
+                                'user',
+                                reportData.user_activity[userDetailIndex].file_details
+                            )"></div>
                         </div>
 
                         <div class="card mb-30">
                             <div class="card-header">
-                                File Structure ({{ reportData.user_activity[userDetailIndex].top_files.length }} Files Total)
+                                <span>Access Types ({{ reportData.user_activity[userDetailIndex].access_types.length }} Total)</span>
+                                <button class="btn btn-secondary" @click="showHumanReadableAccessTypes.userActivity = !showHumanReadableAccessTypes.userActivity" style="margin-left: auto;">
+                                    {{ showHumanReadableAccessTypes.userActivity ? 'Show Raw' : 'Show Readable' }}
+                                </button>
                             </div>
-                            <div class="file-tree" v-html="renderFileTree(
-                                buildFileTree(reportData.user_activity[userDetailIndex].top_files),
-                                0,
-                                'user',
-                                reportData.user_activity[userDetailIndex].file_details,
-                                ''
-                            )"></div>
+                            <div v-html="renderAccessTypesTable(reportData.user_activity[userDetailIndex].access_types, 'userActivity', 'accessTypes', showHumanReadableAccessTypes.userActivity)"></div>
+                        </div>
+
+                        <div class="card mb-30">
+                            <div class="card-header">Applications ({{ reportData.user_activity[userDetailIndex].applications.length }} Total)</div>
+                            <div v-html="renderApplicationsTable(reportData.user_activity[userDetailIndex].applications, 'userActivity', 'applications')"></div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Access Types Tab -->
                 <div class="tab-content" v-show="currentTab === 'access-types'">
-                    <div class="card">
-                        <div class="card-header">Access Type Analysis</div>
+                    <div class="card" v-show="accessTypeDetailIndex === null">
+                        <div class="card-header">
+                            <span>Access Type Analysis</span>
+                            <button class="btn btn-secondary" @click="showHumanReadableAccessTypes.accessTypes = !showHumanReadableAccessTypes.accessTypes" style="margin-left: auto;">
+                                {{ showHumanReadableAccessTypes.accessTypes ? 'Show Raw' : 'Show Readable' }}
+                            </button>
+                        </div>
                         <table class="data-table">
                             <thead>
                                 <tr>
@@ -281,20 +286,67 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="type in reportData?.access_types || []" :key="type.type">
+                                <tr v-for="(type, index) in getAccessTypesData()" :key="type.type + index"
+                                    class="clickable" @click="showAccessTypeDetail(index)">
                                     <td><strong>{{ type.type }}</strong></td>
                                     <td>{{ formatNumber(type.count) }}</td>
-                                    <td>{{ formatNumber(type.unique_users) }}</td>
-                                    <td>{{ formatNumber(type.unique_sites) }}</td>
+                                    <td>{{ type.unique_users !== undefined ? formatNumber(type.unique_users) : 'N/A' }}</td>
+                                    <td>{{ type.unique_sites !== undefined ? formatNumber(type.unique_sites) : 'N/A' }}</td>
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+
+                    <div class="card" v-if="accessTypeDetailIndex !== null && reportData">
+                        <div class="card-header">
+                            <button class="btn btn-secondary" @click="closeAccessTypeDetail()">← Back to Access Types</button>
+                            <span class="detail-title">{{ getAccessTypesData()[accessTypeDetailIndex].type }}</span>
+                        </div>
+                        <div class="stats-grid mb-30">
+                            <div class="stat-card">
+                                <div class="stat-value">{{ formatNumber(getAccessTypesData()[accessTypeDetailIndex].count) }}</div>
+                                <div class="stat-label">Total Operations</div>
+                            </div>
+                            <div class="stat-card green">
+                                <div class="stat-value">{{ formatNumber(getAccessTypesData()[accessTypeDetailIndex].unique_users) }}</div>
+                                <div class="stat-label">Unique Users</div>
+                            </div>
+                            <div class="stat-card orange">
+                                <div class="stat-value">{{ formatNumber(getAccessTypesData()[accessTypeDetailIndex].unique_sites) }}</div>
+                                <div class="stat-label">Unique Sites</div>
+                            </div>
+                            <div class="stat-card red">
+                                <div class="stat-value">{{ getAccessTypesData()[accessTypeDetailIndex].applications[0]?.app || 'N/A' }}</div>
+                                <div class="stat-label">Top Application</div>
+                            </div>
+                        </div>
+                        <div class="card mb-30">
+                            <div class="card-header">All Users ({{ getAccessTypesData()[accessTypeDetailIndex].top_users.length }} Total)</div>
+                            <div v-html="renderUsersTable(getAccessTypesData()[accessTypeDetailIndex].top_users, 'accessTypes', 'users')"></div>
+                        </div>
+
+                        <div class="card mb-30">
+                            <div class="card-header">
+                                Sites & Files ({{ getAccessTypesData()[accessTypeDetailIndex].unique_sites }} Sites, {{ getAccessTypesData()[accessTypeDetailIndex].top_files.length }} Files)
+                            </div>
+                            <div class="file-tree" v-html="renderFileTreeWithSearch(
+                                buildSiteFileTree(getAccessTypesData()[accessTypeDetailIndex].file_details),
+                                'accessTypes',
+                                'access-type',
+                                getAccessTypesData()[accessTypeDetailIndex].file_details
+                            )"></div>
+                        </div>
+
+                        <div class="card mb-30">
+                            <div class="card-header">Applications ({{ getAccessTypesData()[accessTypeDetailIndex].applications.length }} Total)</div>
+                            <div v-html="renderApplicationsTable(getAccessTypesData()[accessTypeDetailIndex].applications, 'accessTypes', 'applications')"></div>
+                        </div>
                     </div>
                 </div>
 
                 <!-- Applications Tab -->
                 <div class="tab-content" v-show="currentTab === 'applications'">
-                    <div class="card">
+                    <div class="card" v-show="applicationDetailIndex === null">
                         <div class="card-header">Application Usage Analysis</div>
                         <table class="data-table">
                             <thead>
@@ -306,7 +358,8 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="app in reportData?.applications || []" :key="app.application">
+                                <tr v-for="(app, index) in reportData?.applications || []" :key="app.application"
+                                    class="clickable" @click="showApplicationDetail(index)">
                                     <td><strong>{{ app.application }}</strong></td>
                                     <td>{{ formatNumber(app.count) }}</td>
                                     <td>{{ formatNumber(app.unique_users) }}</td>
@@ -314,6 +367,57 @@
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+
+                    <div class="card" v-if="applicationDetailIndex !== null && reportData">
+                        <div class="card-header">
+                            <button class="btn btn-secondary" @click="closeApplicationDetail()">← Back to Applications</button>
+                            <span class="detail-title">{{ reportData.applications[applicationDetailIndex].application }}</span>
+                        </div>
+                        <div class="stats-grid mb-30">
+                            <div class="stat-card">
+                                <div class="stat-value">{{ formatNumber(reportData.applications[applicationDetailIndex].count) }}</div>
+                                <div class="stat-label">Total Operations</div>
+                            </div>
+                            <div class="stat-card green">
+                                <div class="stat-value">{{ formatNumber(reportData.applications[applicationDetailIndex].unique_users) }}</div>
+                                <div class="stat-label">Unique Users</div>
+                            </div>
+                            <div class="stat-card orange">
+                                <div class="stat-value">{{ formatNumber(reportData.applications[applicationDetailIndex].unique_sites) }}</div>
+                                <div class="stat-label">Unique Sites</div>
+                            </div>
+                            <div class="stat-card red">
+                                <div class="stat-value">{{ reportData.applications[applicationDetailIndex].access_types[0]?.type || 'N/A' }}</div>
+                                <div class="stat-label">Top Access Type</div>
+                            </div>
+                        </div>
+                        <div class="card mb-30">
+                            <div class="card-header">All Users ({{ reportData.applications[applicationDetailIndex].top_users.length }} Total)</div>
+                            <div v-html="renderUsersTable(reportData.applications[applicationDetailIndex].top_users, 'applications', 'users')"></div>
+                        </div>
+
+                        <div class="card mb-30">
+                            <div class="card-header">
+                                Sites & Files ({{ reportData.applications[applicationDetailIndex].unique_sites }} Sites, {{ reportData.applications[applicationDetailIndex].top_files.length }} Files)
+                            </div>
+                            <div class="file-tree" v-html="renderFileTreeWithSearch(
+                                buildSiteFileTree(reportData.applications[applicationDetailIndex].file_details),
+                                'applications',
+                                'application',
+                                reportData.applications[applicationDetailIndex].file_details
+                            )"></div>
+                        </div>
+
+                        <div class="card mb-30">
+                            <div class="card-header">
+                                <span>Access Types ({{ reportData.applications[applicationDetailIndex].access_types.length }} Total)</span>
+                                <button class="btn btn-secondary" @click="showHumanReadableAccessTypes.applications = !showHumanReadableAccessTypes.applications" style="margin-left: auto;">
+                                    {{ showHumanReadableAccessTypes.applications ? 'Show Raw' : 'Show Readable' }}
+                                </button>
+                            </div>
+                            <div v-html="renderAccessTypesTable(reportData.applications[applicationDetailIndex].access_types, 'applications', 'accessTypes', showHumanReadableAccessTypes.applications)"></div>
+                        </div>
                     </div>
                 </div>
 

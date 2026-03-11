@@ -82,6 +82,12 @@ open index.html
 
 FileAccessed, FileDownloaded, FileModified, FileUploaded, FileDeleted, FileMoved, FileRenamed, FilePreviewed, FileRecycled, FileSyncDownloadedFull, FileSyncUploadedFull, FileAccessedExtended, FileModifiedExtended, FileUploadedPartial, FileVersionsAllDeleted
 
+### What are these File Operations?
+See Microsoft's documentation [here](https://learn.microsoft.com/en-us/purview/audit-log-activities#file-and-page-activities)
+
+### Who are these random users? (app@sharepoint, SHAREPOINT\system)
+https://learn.microsoft.com/en-us/purview/audit-log-detailed-properties
+
 ## Troubleshooting
 
 **"No file operations found"**

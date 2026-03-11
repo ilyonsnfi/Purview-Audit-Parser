@@ -31,6 +31,8 @@ Creates `your_export_file_access_report.csv` with clean file operations data.
 
 ### Step 3: View Dashboard
 
+View the dashboard at https://ilyonsnfi.github.io/Purview-Audit-Parser/
+
 Double click the `index.html` file, or from the terminal of your choice run
 ```bash
 open index.html  # macOS

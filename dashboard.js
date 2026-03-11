@@ -342,13 +342,14 @@ document.addEventListener('alpine:init', () => {
 
         // Initialize charts
         initializeCharts() {
-            this.$nextTick(() => {
+            // Wait for Alpine to render the dashboard before creating charts
+            setTimeout(() => {
                 this.createTopSitesChart();
                 this.createTopUsersChart();
                 this.createAccessTypeChart();
                 this.createFileTypeChart();
                 this.createTimelineChart();
-            });
+            }, 100);
         },
 
         // Create charts (these will be called after DOM is ready)

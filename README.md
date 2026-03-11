@@ -31,10 +31,10 @@ Creates `your_export_file_access_report.csv` with clean file operations data.
 
 ### Step 3: View Dashboard
 
-Double click the `dashboard.html` file, or from the terminal of your choice run
+Double click the `index.html` file, or from the terminal of your choice run
 ```bash
-open dashboard.html  # macOS
-start dashboard.html  # Windows
+open index.html  # macOS
+start index.html  # Windows
 ```
 
 Click **"Select CSV file"** → choose the `_file_access_report.csv` file.
@@ -72,7 +72,7 @@ Done! 🎉
 python parse_purview_audit_log.py audit_feb_2025.csv
 # Creates: audit_feb_2025_file_access_report.csv
 
-open dashboard.html
+open index.html
 # Load the CSV in browser
 ```
 

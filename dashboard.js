@@ -47,9 +47,14 @@ document.addEventListener('alpine:init', () => {
                         setTimeout(() => {
                             try {
                                 this.reportData = this.analyzeData(this.rawData);
+                                console.log('Report data generated:', this.reportData);
+                                console.log('Setting loading to false...');
                                 this.loading = false;
+                                console.log('Loading is now:', this.loading);
+                                console.log('Initializing charts...');
                                 this.initializeCharts();
                             } catch (error) {
+                                console.error('Analysis error:', error);
                                 this.showError('Analysis Error', error.message);
                             }
                         }, 100);
@@ -342,21 +347,39 @@ document.addEventListener('alpine:init', () => {
 
         // Initialize charts
         initializeCharts() {
-            // Wait for Alpine to render the dashboard before creating charts
+            console.log('initializeCharts called, waiting for DOM...');
+            // Wait longer for Alpine to fully render and show the dashboard
+            // x-show needs time to apply display changes before canvas dimensions are available
             setTimeout(() => {
+                console.log('Creating charts now...');
                 this.createTopSitesChart();
                 this.createTopUsersChart();
                 this.createAccessTypeChart();
                 this.createFileTypeChart();
                 this.createTimelineChart();
-            }, 100);
+                console.log('Charts creation attempted');
+            }, 500);
         },
 
         // Create charts (these will be called after DOM is ready)
         createTopSitesChart() {
-            const ctx = document.getElementById('topSitesChart')?.getContext('2d');
-            if (!ctx) return;
+            const canvas = document.getElementById('topSitesChart');
+            console.log('topSitesChart canvas:', canvas);
 
+            // Check if canvas has dimensions (Alpine x-show needs time to render)
+            if (canvas && (canvas.offsetWidth === 0 || canvas.offsetHeight === 0)) {
+                console.warn('Canvas has no dimensions yet, will retry...');
+                setTimeout(() => this.createTopSitesChart(), 200);
+                return;
+            }
+
+            const ctx = canvas?.getContext('2d');
+            if (!ctx) {
+                console.warn('Could not get context for topSitesChart');
+                return;
+            }
+
+            console.log('Canvas dimensions:', canvas.offsetWidth, 'x', canvas.offsetHeight);
             const data = this.reportData.executive_summary.top_sites.slice(0, 10);
 
             if (this.charts.topSites) this.charts.topSites.destroy();
@@ -385,7 +408,12 @@ document.addEventListener('alpine:init', () => {
         },
 
         createTopUsersChart() {
-            const ctx = document.getElementById('topUsersChart')?.getContext('2d');
+            const canvas = document.getElementById('topUsersChart');
+            if (canvas && (canvas.offsetWidth === 0 || canvas.offsetHeight === 0)) {
+                setTimeout(() => this.createTopUsersChart(), 200);
+                return;
+            }
+            const ctx = canvas?.getContext('2d');
             if (!ctx) return;
 
             const data = this.reportData.executive_summary.top_users.slice(0, 10);
@@ -416,7 +444,12 @@ document.addEventListener('alpine:init', () => {
         },
 
         createAccessTypeChart() {
-            const ctx = document.getElementById('accessTypeChart')?.getContext('2d');
+            const canvas = document.getElementById('accessTypeChart');
+            if (canvas && (canvas.offsetWidth === 0 || canvas.offsetHeight === 0)) {
+                setTimeout(() => this.createAccessTypeChart(), 200);
+                return;
+            }
+            const ctx = canvas?.getContext('2d');
             if (!ctx) return;
 
             const data = this.reportData.executive_summary.access_type_distribution.slice(0, 8);
@@ -450,7 +483,12 @@ document.addEventListener('alpine:init', () => {
         },
 
         createFileTypeChart() {
-            const ctx = document.getElementById('fileTypeChart')?.getContext('2d');
+            const canvas = document.getElementById('fileTypeChart');
+            if (canvas && (canvas.offsetWidth === 0 || canvas.offsetHeight === 0)) {
+                setTimeout(() => this.createFileTypeChart(), 200);
+                return;
+            }
+            const ctx = canvas?.getContext('2d');
             if (!ctx) return;
 
             const data = this.reportData.executive_summary.file_type_distribution.slice(0, 10);
@@ -482,7 +520,12 @@ document.addEventListener('alpine:init', () => {
         },
 
         createTimelineChart() {
-            const ctx = document.getElementById('timelineChart')?.getContext('2d');
+            const canvas = document.getElementById('timelineChart');
+            if (canvas && (canvas.offsetWidth === 0 || canvas.offsetHeight === 0)) {
+                setTimeout(() => this.createTimelineChart(), 200);
+                return;
+            }
+            const ctx = canvas?.getContext('2d');
             if (!ctx) return;
 
             const data = this.reportData.daily_operations;

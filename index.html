@@ -7,38 +7,56 @@
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="dashboard.js"></script>
 </head>
-<body>
+<body x-data x-cloak>
+    <!-- Header -->
     <header>
         <div class="container">
             <h1>Purview Audit Report Dashboard</h1>
-            <div class="subtitle" id="reportSubtitle">Loading report data...</div>
+            <div class="subtitle"
+                 x-text="$store.dashboard.reportData
+                         ? `Report Period: ${$store.dashboard.formatDate($store.dashboard.reportData.metadata.date_range.start)} to ${$store.dashboard.formatDate($store.dashboard.reportData.metadata.date_range.end)} (${$store.dashboard.reportData.metadata.date_range.days} days)`
+                         : 'Loading report data...'">
+            </div>
         </div>
     </header>
 
     <div class="container">
         <!-- Navigation Tabs -->
-        <div class="tabs">
-            <button class="tab active" onclick="showTab('summary')">Executive Summary</button>
-            <button class="tab" onclick="showTab('sites')">Site Activity</button>
-            <button class="tab" onclick="showTab('users')">User Activity</button>
-            <button class="tab" onclick="showTab('access-types')">Access Types</button>
-            <button class="tab" onclick="showTab('applications')">Applications</button>
-            <button class="tab" onclick="showTab('timeline')">Timeline</button>
+        <div class="tabs" x-show="!$store.dashboard.loading">
+            <button class="tab"
+                    :class="{ 'active': $store.dashboard.currentTab === 'summary' }"
+                    @click="$store.dashboard.showTab('summary')">Executive Summary</button>
+            <button class="tab"
+                    :class="{ 'active': $store.dashboard.currentTab === 'sites' }"
+                    @click="$store.dashboard.showTab('sites')">Site Activity</button>
+            <button class="tab"
+                    :class="{ 'active': $store.dashboard.currentTab === 'users' }"
+                    @click="$store.dashboard.showTab('users')">User Activity</button>
+            <button class="tab"
+                    :class="{ 'active': $store.dashboard.currentTab === 'access-types' }"
+                    @click="$store.dashboard.showTab('access-types')">Access Types</button>
+            <button class="tab"
+                    :class="{ 'active': $store.dashboard.currentTab === 'applications' }"
+                    @click="$store.dashboard.showTab('applications')">Applications</button>
+            <button class="tab"
+                    :class="{ 'active': $store.dashboard.currentTab === 'timeline' }"
+                    @click="$store.dashboard.showTab('timeline')">Timeline</button>
         </div>
 
         <!-- Loading State -->
-        <div id="loading" class="loading">
+        <div class="loading" x-show="$store.dashboard.loading">
             <div class="loading-content">
                 <h2 class="loading-title">Load File Access Data</h2>
                 <p class="loading-description">
                     Select the CSV file from <strong>parse_purview_audit_log.py</strong><br>
                     (e.g., audit_file_access_report.csv)
                 </p>
-                <input type="file" id="fileInput" accept=".csv" class="hidden" onchange="handleFileSelect(event)">
-                <button class="btn btn-primary file-input-btn" onclick="document.getElementById('fileInput').click()">
+                <input type="file" id="fileInput" accept=".csv" class="hidden" @change="handleFileSelect($event)">
+                <button class="btn btn-primary file-input-btn" @click="$el.previousElementSibling.click()">
                     📂 Select CSV File
                 </button>
                 <p class="loading-note">
@@ -49,24 +67,27 @@
         </div>
 
         <!-- Dashboard Content -->
-        <div id="dashboard" class="hidden">
-            <!-- Executive Summary Tab -->
-            <div id="tab-summary" class="tab-content active">
+        <div x-show="!$store.dashboard.loading" x-cloak>
+
+            <!-- =================================
+                 EXECUTIVE SUMMARY TAB
+                 ================================= -->
+            <div class="tab-content" x-show="$store.dashboard.currentTab === 'summary'">
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-value" id="totalOperations">0</div>
+                        <div class="stat-value" x-text="$store.dashboard.formatNumber($store.dashboard.reportData?.metadata.total_operations || 0)"></div>
                         <div class="stat-label">Total File Operations</div>
                     </div>
                     <div class="stat-card green">
-                        <div class="stat-value" id="uniqueUsers">0</div>
+                        <div class="stat-value" x-text="$store.dashboard.formatNumber($store.dashboard.reportData?.metadata.unique_users || 0)"></div>
                         <div class="stat-label">Unique Users</div>
                     </div>
                     <div class="stat-card orange">
-                        <div class="stat-value" id="uniqueSites">0</div>
+                        <div class="stat-value" x-text="$store.dashboard.formatNumber($store.dashboard.reportData?.metadata.unique_sites || 0)"></div>
                         <div class="stat-label">Unique Sites</div>
                     </div>
                     <div class="stat-card red">
-                        <div class="stat-value" id="uniqueFiles">0</div>
+                        <div class="stat-value" x-text="$store.dashboard.formatNumber($store.dashboard.reportData?.metadata.unique_files || 0)"></div>
                         <div class="stat-label">Unique Files</div>
                     </div>
                 </div>
@@ -102,84 +123,234 @@
                 </div>
             </div>
 
-            <!-- Site Activity Tab -->
-            <div id="tab-sites" class="tab-content">
-                <!-- Main Sites List -->
-                <div id="sitesMainView" class="card">
-                    <div class="card-header">
-                        Site Activity Overview
-                        <div class="controls">
-                            <div class="control-group">
-                                <input type="text" id="siteSearch" placeholder="Search sites..."
-                                       oninput="filterSites()">
-                            </div>
-                        </div>
-                    </div>
-                    <div id="sitesList"></div>
+            <!-- =================================
+                 SITE ACTIVITY TAB
+                 ================================= -->
+            <div class="tab-content" x-show="$store.dashboard.currentTab === 'sites'">
+                <!-- Site List View -->
+                <div class="card" x-show="$store.dashboard.siteDetailIndex === null">
+                    <div class="card-header">Site Activity Overview</div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Site</th>
+                                <th>Operations</th>
+                                <th>Users</th>
+                                <th>Files</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="(site, index) in $store.dashboard.reportData?.site_activity || []" :key="index">
+                                <tr class="clickable" @click="$store.dashboard.showSiteDetail(index)">
+                                    <td x-text="$store.dashboard.extractSiteName(site.site_url)"></td>
+                                    <td x-text="$store.dashboard.formatNumber(site.total_operations)"></td>
+                                    <td x-text="$store.dashboard.formatNumber(site.unique_users)"></td>
+                                    <td x-text="$store.dashboard.formatNumber(site.unique_files)"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
                 </div>
 
                 <!-- Site Detail View -->
-                <div id="siteDetailView" class="hidden">
+                <template x-if="$store.dashboard.siteDetailIndex !== null">
                     <div class="card">
                         <div class="card-header">
-                            <button class="btn btn-secondary" onclick="closeSiteDetail()">
+                            <button class="btn btn-secondary" @click="$store.dashboard.closeSiteDetail()">
                                 ← Back to Sites
                             </button>
-                            <span id="siteDetailTitle" class="detail-title"></span>
+                            <span class="detail-title"
+                                  x-text="$store.dashboard.extractSiteName($store.dashboard.reportData.site_activity[$store.dashboard.siteDetailIndex].site_url)"></span>
                         </div>
-                        <div id="siteDetailContent"></div>
-                    </div>
-                </div>
-            </div>
+                        <div x-data="{ site: $store.dashboard.reportData.site_activity[$store.dashboard.siteDetailIndex] }">
+                            <div class="stats-grid mb-30">
+                                <div class="stat-card">
+                                    <div class="stat-value" x-text="$store.dashboard.formatNumber(site.total_operations)"></div>
+                                    <div class="stat-label">Total Operations</div>
+                                </div>
+                                <div class="stat-card green">
+                                    <div class="stat-value" x-text="$store.dashboard.formatNumber(site.unique_users)"></div>
+                                    <div class="stat-label">Unique Users</div>
+                                </div>
+                                <div class="stat-card orange">
+                                    <div class="stat-value" x-text="$store.dashboard.formatNumber(site.unique_files)"></div>
+                                    <div class="stat-label">Unique Files</div>
+                                </div>
+                                <div class="stat-card red">
+                                    <div class="stat-value" x-text="site.file_types[0]?.type.toUpperCase() || 'N/A'"></div>
+                                    <div class="stat-label">Top File Type</div>
+                                </div>
+                            </div>
 
-            <!-- User Activity Tab -->
-            <div id="tab-users" class="tab-content">
-                <!-- Main Users List -->
-                <div id="usersMainView" class="card">
-                    <div class="card-header">
-                        User Activity Overview
-                        <div class="controls">
-                            <div class="control-group">
-                                <input type="text" id="userSearch" placeholder="Search users..."
-                                       oninput="filterUsers()">
+                            <div class="card mb-30">
+                                <div class="card-header" x-text="`All Users (${site.top_users.length} Total)`"></div>
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>User</th>
+                                            <th>Operations</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="user in site.top_users.slice(0, 20)" :key="user.user">
+                                            <tr>
+                                                <td x-text="user.user"></td>
+                                                <td x-text="$store.dashboard.formatNumber(user.operations)"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
-                    <div id="usersList"></div>
+                </template>
+            </div>
+
+            <!-- =================================
+                 USER ACTIVITY TAB
+                 ================================= -->
+            <div class="tab-content" x-show="$store.dashboard.currentTab === 'users'">
+                <!-- User List View -->
+                <div class="card" x-show="$store.dashboard.userDetailIndex === null">
+                    <div class="card-header">User Activity Overview</div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Operations</th>
+                                <th>Sites</th>
+                                <th>Files</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="(user, index) in $store.dashboard.reportData?.user_activity || []" :key="index">
+                                <tr class="clickable" @click="$store.dashboard.showUserDetail(index)">
+                                    <td x-text="user.user_id"></td>
+                                    <td x-text="$store.dashboard.formatNumber(user.total_operations)"></td>
+                                    <td x-text="$store.dashboard.formatNumber(user.unique_sites)"></td>
+                                    <td x-text="$store.dashboard.formatNumber(user.unique_files)"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
                 </div>
 
                 <!-- User Detail View -->
-                <div id="userDetailView" class="hidden">
+                <template x-if="$store.dashboard.userDetailIndex !== null">
                     <div class="card">
                         <div class="card-header">
-                            <button class="btn btn-secondary" onclick="closeUserDetail()">
+                            <button class="btn btn-secondary" @click="$store.dashboard.closeUserDetail()">
                                 ← Back to Users
                             </button>
-                            <span id="userDetailTitle" class="detail-title"></span>
+                            <span class="detail-title"
+                                  x-text="$store.dashboard.reportData.user_activity[$store.dashboard.userDetailIndex].user_id"></span>
                         </div>
-                        <div id="userDetailContent"></div>
+                        <div x-data="{ user: $store.dashboard.reportData.user_activity[$store.dashboard.userDetailIndex] }">
+                            <div class="stats-grid mb-30">
+                                <div class="stat-card">
+                                    <div class="stat-value" x-text="$store.dashboard.formatNumber(user.total_operations)"></div>
+                                    <div class="stat-label">Total Operations</div>
+                                </div>
+                                <div class="stat-card green">
+                                    <div class="stat-value" x-text="$store.dashboard.formatNumber(user.unique_sites)"></div>
+                                    <div class="stat-label">Sites Accessed</div>
+                                </div>
+                                <div class="stat-card orange">
+                                    <div class="stat-value" x-text="$store.dashboard.formatNumber(user.unique_files)"></div>
+                                    <div class="stat-label">Unique Files</div>
+                                </div>
+                                <div class="stat-card red">
+                                    <div class="stat-value" x-text="user.access_types[0]?.type || 'N/A'"></div>
+                                    <div class="stat-label">Top Access Type</div>
+                                </div>
+                            </div>
+
+                            <div class="card mb-30">
+                                <div class="card-header" x-text="`All Sites (${user.top_sites.length} Total)`"></div>
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Site</th>
+                                            <th>Operations</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="site in user.top_sites.slice(0, 20)" :key="site.site">
+                                            <tr>
+                                                <td x-text="$store.dashboard.extractSiteName(site.site)"></td>
+                                                <td x-text="$store.dashboard.formatNumber(site.operations)"></td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
-                </div>
+                </template>
             </div>
 
-            <!-- Access Types Tab -->
-            <div id="tab-access-types" class="tab-content">
+            <!-- =================================
+                 ACCESS TYPES TAB
+                 ================================= -->
+            <div class="tab-content" x-show="$store.dashboard.currentTab === 'access-types'">
                 <div class="card">
                     <div class="card-header">Access Type Analysis</div>
-                    <div id="accessTypesList"></div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Access Type</th>
+                                <th>Count</th>
+                                <th>Users</th>
+                                <th>Sites</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="type in $store.dashboard.reportData?.access_types || []" :key="type.type">
+                                <tr>
+                                    <td><strong x-text="type.type"></strong></td>
+                                    <td x-text="$store.dashboard.formatNumber(type.count)"></td>
+                                    <td x-text="$store.dashboard.formatNumber(type.unique_users)"></td>
+                                    <td x-text="$store.dashboard.formatNumber(type.unique_sites)"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
-            <!-- Applications Tab -->
-            <div id="tab-applications" class="tab-content">
+            <!-- =================================
+                 APPLICATIONS TAB
+                 ================================= -->
+            <div class="tab-content" x-show="$store.dashboard.currentTab === 'applications'">
                 <div class="card">
                     <div class="card-header">Application Usage Analysis</div>
-                    <div id="applicationsList"></div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Application</th>
+                                <th>Count</th>
+                                <th>Users</th>
+                                <th>Sites</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="app in $store.dashboard.reportData?.applications || []" :key="app.application">
+                                <tr>
+                                    <td><strong x-text="app.application"></strong></td>
+                                    <td x-text="$store.dashboard.formatNumber(app.count)"></td>
+                                    <td x-text="$store.dashboard.formatNumber(app.unique_users)"></td>
+                                    <td x-text="$store.dashboard.formatNumber(app.unique_sites)"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
-            <!-- Timeline Tab -->
-            <div id="tab-timeline" class="tab-content">
+            <!-- =================================
+                 TIMELINE TAB
+                 ================================= -->
+            <div class="tab-content" x-show="$store.dashboard.currentTab === 'timeline'">
                 <div class="card">
                     <div class="card-header">Activity Timeline</div>
                     <div class="card-subheader">Daily file operations over the reporting period</div>
@@ -188,1661 +359,45 @@
                     </div>
                 </div>
             </div>
+
         </div>
     </div>
 
     <!-- Export Controls -->
-    <div class="export-controls">
-        <button class="btn btn-primary" onclick="exportToPDF()">
+    <div class="export-controls" x-show="!$store.dashboard.loading">
+        <button class="btn btn-primary" @click="exportToPDF()">
             📄 Export to PDF
         </button>
     </div>
 
-    <!-- User Modal -->
-    <div id="userModal" class="modal">
+    <!-- Modal -->
+    <div class="modal" :class="{ 'active': $store.dashboard.modalOpen }" @click.self="$store.dashboard.closeModal()">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="modalTitle">Users</h2>
-                <button class="modal-close" onclick="closeUserModal()">&times;</button>
+                <h2 x-text="$store.dashboard.modalTitle"></h2>
+                <button class="modal-close" @click="$store.dashboard.closeModal()">&times;</button>
             </div>
-            <div class="modal-body" id="modalBody">
-                <!-- Content populated by JavaScript -->
+            <div class="modal-body">
+                <template x-if="$store.dashboard.modalUsers.length === 0">
+                    <p class="text-center" style="color: var(--text-secondary);">No users found</p>
+                </template>
+                <template x-if="$store.dashboard.modalUsers.length > 0">
+                    <div>
+                        <div style="margin-bottom: 15px; color: var(--text-secondary);">
+                            <strong x-text="$store.dashboard.modalUsers.length"></strong> <span x-text="$store.dashboard.modalUsers.length !== 1 ? 'users' : 'user'"></span>
+                            • <strong x-text="$store.dashboard.formatNumber($store.dashboard.modalUsers.reduce((sum, u) => sum + u.operations, 0))"></strong> total operations
+                        </div>
+                        <template x-for="user in $store.dashboard.modalUsers" :key="user.user">
+                            <div class="user-list-item">
+                                <span class="user-name">👤 <span x-text="user.user"></span></span>
+                                <span class="user-ops"><span x-text="$store.dashboard.formatNumber(user.operations)"></span> ops</span>
+                            </div>
+                        </template>
+                    </div>
+                </template>
             </div>
         </div>
     </div>
 
-    <script>
-        // Global data storage
-        let reportData = null;
-        let rawData = [];  // Store raw CSV records for drill-downs
-        let charts = {};
-
-        // Handle file selection - Parse CSV
-        function handleFileSelect(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            // Show loading state
-            document.getElementById('loading').innerHTML = `
-                <div class="loading-spinner"></div>
-                <p>Parsing CSV file...</p>
-                <p style="font-size: 14px; color: var(--text-secondary); margin-top: 10px;">This may take a moment for large files</p>
-            `;
-
-            // Parse CSV with Papa Parse
-            Papa.parse(file, {
-                header: true,
-                dynamicTyping: false,
-                skipEmptyLines: true,
-                complete: function(results) {
-                    try {
-                        rawData = results.data;
-
-                        document.getElementById('loading').innerHTML = `
-                            <div class="loading-spinner"></div>
-                            <p>Analyzing ${rawData.length.toLocaleString()} operations...</p>
-                        `;
-
-                        // Small delay to let UI update
-                        setTimeout(() => {
-                            try {
-                                reportData = analyzeData(rawData);
-                                initializeDashboard();
-                            } catch (error) {
-                                showError('Analysis Error', error.message);
-                            }
-                        }, 100);
-
-                    } catch (error) {
-                        showError('CSV Parsing Error', error.message);
-                    }
-                },
-                error: function(error) {
-                    showError('File Read Error', error.message);
-                }
-            });
-        }
-
-        // Show error message
-        function showError(title, message) {
-            document.getElementById('loading').innerHTML = `
-                <div style="color: var(--danger-color); padding: 40px; text-align: center;">
-                    <h2>${title}</h2>
-                    <p>${message}</p>
-                    <p style="margin-top: 20px; color: var(--text-secondary);">
-                        Make sure you selected the correct CSV file from parse_purview_audit_log.py
-                    </p>
-                    <button class="btn btn-primary" onclick="location.reload()" style="margin-top: 20px;">
-                        Try Again
-                    </button>
-                </div>
-            `;
-        }
-
-        // Analyze CSV data and build report structure
-        function analyzeData(data) {
-            console.log('Analyzing', data.length, 'records...');
-            console.log('Sample row:', data[0]);
-
-            // Data structures
-            const siteData = {};
-            const userData = {};
-            const accessTypeData = {};
-            const applicationData = {};
-            const dailyOps = {};
-            const fileTypes = {};
-
-            let totalOps = 0;
-            const allFiles = new Set();
-            const allDates = [];
-            let invalidDates = 0;
-
-            // Process each record
-            data.forEach((row, index) => {
-                if (!row.user_id || !row.operation) {
-                    console.log('Skipping row', index, '- missing user_id or operation');
-                    return; // Skip invalid rows
-                }
-
-                totalOps++;
-
-                const fileName = row.file_name || 'Unknown';
-                const fileExt = row.file_extension || '';
-                const filePath = row.file_path || '';
-                const userId = row.user_id;
-                const operation = row.operation;
-                const timestamp = row.timestamp || '';
-                const application = row.application || 'Unknown';
-                const siteUrl = row.site_url || 'Unknown';
-
-                // Track files
-                const fileKey = `${filePath}/${fileName}`;
-                allFiles.add(fileKey);
-
-                // Track file types
-                if (fileExt) {
-                    fileTypes[fileExt] = (fileTypes[fileExt] || 0) + 1;
-                }
-
-                // Track dates
-                if (timestamp) {
-                    const cleanTimestamp = timestamp.trim();
-                    const date = cleanTimestamp.split('T')[0];
-
-                    // Try to parse the date
-                    const dateObj = new Date(cleanTimestamp);
-                    if (!isNaN(dateObj.getTime())) {
-                        allDates.push(dateObj);
-                        dailyOps[date] = (dailyOps[date] || 0) + 1;
-                    } else {
-                        invalidDates++;
-                        if (invalidDates <= 3) {
-                            console.warn('Invalid timestamp:', cleanTimestamp);
-                        }
-                    }
-                }
-
-                // Site data
-                if (!siteData[siteUrl]) {
-                    siteData[siteUrl] = {
-                        operations: 0,
-                        users: new Set(),
-                        files: new Set(),
-                        accessTypes: {},
-                        applications: {},
-                        fileTypes: {},
-                        records: []  // Store all records for this site
-                    };
-                }
-                siteData[siteUrl].operations++;
-                siteData[siteUrl].users.add(userId);
-                siteData[siteUrl].files.add(fileKey);
-                siteData[siteUrl].accessTypes[operation] = (siteData[siteUrl].accessTypes[operation] || 0) + 1;
-                siteData[siteUrl].applications[application] = (siteData[siteUrl].applications[application] || 0) + 1;
-                if (fileExt) siteData[siteUrl].fileTypes[fileExt] = (siteData[siteUrl].fileTypes[fileExt] || 0) + 1;
-                siteData[siteUrl].records.push(row);
-
-                // User data
-                if (!userData[userId]) {
-                    userData[userId] = {
-                        operations: 0,
-                        sites: new Set(),
-                        files: new Set(),
-                        accessTypes: {},
-                        applications: {},
-                        records: []  // Store all records for this user
-                    };
-                }
-                userData[userId].operations++;
-                userData[userId].sites.add(siteUrl);
-                userData[userId].files.add(fileKey);
-                userData[userId].accessTypes[operation] = (userData[userId].accessTypes[operation] || 0) + 1;
-                userData[userId].applications[application] = (userData[userId].applications[application] || 0) + 1;
-                userData[userId].records.push(row);
-
-                // Access type data
-                if (!accessTypeData[operation]) {
-                    accessTypeData[operation] = {
-                        count: 0,
-                        users: new Set(),
-                        sites: new Set(),
-                        applications: {}
-                    };
-                }
-                accessTypeData[operation].count++;
-                accessTypeData[operation].users.add(userId);
-                accessTypeData[operation].sites.add(siteUrl);
-                accessTypeData[operation].applications[application] =
-                    (accessTypeData[operation].applications[application] || 0) + 1;
-
-                // Application data
-                if (!applicationData[application]) {
-                    applicationData[application] = {
-                        count: 0,
-                        accessTypes: {},
-                        users: new Set(),
-                        sites: new Set()
-                    };
-                }
-                applicationData[application].count++;
-                applicationData[application].accessTypes[operation] =
-                    (applicationData[application].accessTypes[operation] || 0) + 1;
-                applicationData[application].users.add(userId);
-                applicationData[application].sites.add(siteUrl);
-            });
-
-            console.log('Analysis complete. Building report...');
-            console.log('Total operations:', totalOps);
-            console.log('Valid dates:', allDates.length);
-            console.log('Invalid dates:', invalidDates);
-            console.log('Sites:', Object.keys(siteData).length);
-            console.log('Users:', Object.keys(userData).length);
-
-            // Convert to arrays and sort
-            const siteActivity = Object.entries(siteData).map(([url, data]) => {
-                // Calculate ALL users (sorted by operation count)
-                const userCounts = {};
-                data.records.forEach(r => {
-                    userCounts[r.user_id] = (userCounts[r.user_id] || 0) + 1;
-                });
-                const topUsers = Object.entries(userCounts)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([user, count]) => ({ user, operations: count }));
-
-                // Calculate ALL files (sorted by access count)
-                const fileCounts = {};
-                data.records.forEach(r => {
-                    const key = `${r.file_path}/${r.file_name}`;
-                    fileCounts[key] = (fileCounts[key] || 0) + 1;
-                });
-                const topFiles = Object.entries(fileCounts)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([file, count]) => ({ file, operations: count }));
-
-                return {
-                    site_url: url,
-                    total_operations: data.operations,
-                    unique_users: data.users.size,
-                    unique_files: data.files.size,
-                    access_types: Object.entries(data.accessTypes)
-                        .sort((a, b) => b[1] - a[1])
-                        .map(([type, count]) => ({ type, count })),
-                    applications: Object.entries(data.applications)
-                        .sort((a, b) => b[1] - a[1])
-                        .map(([app, count]) => ({ app, count })),
-                    file_types: Object.entries(data.fileTypes)
-                        .sort((a, b) => b[1] - a[1])
-                        .map(([type, count]) => ({ type, count })),
-                    top_users: topUsers,
-                    top_files: topFiles,
-                    file_details: data.records  // Include all records for drill-down
-                };
-            }).sort((a, b) => b.total_operations - a.total_operations);
-
-            const userActivity = Object.entries(userData).map(([userId, data]) => {
-                // Calculate ALL sites (sorted by operation count)
-                const siteCounts = {};
-                data.records.forEach(r => {
-                    siteCounts[r.site_url] = (siteCounts[r.site_url] || 0) + 1;
-                });
-                const topSites = Object.entries(siteCounts)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([site, count]) => ({ site, operations: count }));
-
-                // Calculate ALL files (sorted by access count)
-                const fileCounts = {};
-                data.records.forEach(r => {
-                    const key = `${r.file_path}/${r.file_name}`;
-                    fileCounts[key] = (fileCounts[key] || 0) + 1;
-                });
-                const topFiles = Object.entries(fileCounts)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([file, count]) => ({ file, operations: count }));
-
-                return {
-                    user_id: userId,
-                    total_operations: data.operations,
-                    unique_sites: data.sites.size,
-                    unique_files: data.files.size,
-                    access_types: Object.entries(data.accessTypes)
-                        .sort((a, b) => b[1] - a[1])
-                        .map(([type, count]) => ({ type, count })),
-                    applications: Object.entries(data.applications)
-                        .sort((a, b) => b[1] - a[1])
-                        .map(([app, count]) => ({ app, count })),
-                    top_sites: topSites,
-                    top_files: topFiles,
-                    file_details: data.records  // Include all records for drill-down
-                };
-            }).sort((a, b) => b.total_operations - a.total_operations);
-
-            const accessTypes = Object.entries(accessTypeData).map(([type, data]) => ({
-                type,
-                count: data.count,
-                unique_users: data.users.size,
-                unique_sites: data.sites.size,
-                applications: Object.entries(data.applications)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([app, count]) => ({ app, count }))
-            })).sort((a, b) => b.count - a.count);
-
-            const applications = Object.entries(applicationData).map(([app, data]) => ({
-                application: app,
-                count: data.count,
-                unique_users: data.users.size,
-                unique_sites: data.sites.size,
-                access_types: Object.entries(data.accessTypes)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([type, count]) => ({ type, count }))
-            })).sort((a, b) => b.count - a.count);
-
-            // Date range
-            const sortedDates = allDates.sort((a, b) => a - b);
-            const dateRange = {
-                start: sortedDates.length > 0 ? sortedDates[0].toISOString() : 'Unknown',
-                end: sortedDates.length > 0 ? sortedDates[sortedDates.length - 1].toISOString() : 'Unknown',
-                days: sortedDates.length > 0 ?
-                    Math.ceil((sortedDates[sortedDates.length - 1] - sortedDates[0]) / (1000 * 60 * 60 * 24)) + 1 : 0
-            };
-
-            // Build report structure
-            return {
-                metadata: {
-                    generated_at: new Date().toISOString(),
-                    source_file: 'CSV',
-                    total_operations: totalOps,
-                    unique_users: Object.keys(userData).length,
-                    unique_sites: Object.keys(siteData).length,
-                    unique_files: allFiles.size,
-                    date_range: dateRange
-                },
-                executive_summary: {
-                    top_sites: siteActivity.slice(0, 10).map(s => ({
-                        site: s.site_url,
-                        operations: s.total_operations
-                    })),
-                    top_users: userActivity.slice(0, 10).map(u => ({
-                        user: u.user_id,
-                        operations: u.total_operations
-                    })),
-                    access_type_distribution: accessTypes,
-                    file_type_distribution: Object.entries(fileTypes)
-                        .sort((a, b) => b[1] - a[1])
-                        .slice(0, 15)
-                        .map(([type, count]) => ({ type, count }))
-                },
-                site_activity: siteActivity,
-                user_activity: userActivity,
-                access_types: accessTypes,
-                applications: applications,
-                daily_operations: Object.entries(dailyOps)
-                    .sort((a, b) => a[0].localeCompare(b[0]))
-                    .map(([date, count]) => ({ date, count }))
-            };
-        }
-
-        // No more tryAutoLoad needed
-
-        // Initialize dashboard
-        function initializeDashboard() {
-            document.getElementById('loading').classList.add('hidden');
-            document.getElementById('dashboard').classList.remove('hidden');
-
-            // Update subtitle
-            const dateRange = reportData.metadata.date_range;
-            document.getElementById('reportSubtitle').textContent =
-                `Report Period: ${formatDate(dateRange.start)} to ${formatDate(dateRange.end)} (${dateRange.days} days)`;
-
-            // Populate summary stats
-            document.getElementById('totalOperations').textContent =
-                formatNumber(reportData.metadata.total_operations);
-            document.getElementById('uniqueUsers').textContent =
-                formatNumber(reportData.metadata.unique_users);
-            document.getElementById('uniqueSites').textContent =
-                formatNumber(reportData.metadata.unique_sites);
-            document.getElementById('uniqueFiles').textContent =
-                formatNumber(reportData.metadata.unique_files);
-
-            // Create charts
-            createTopSitesChart();
-            createTopUsersChart();
-            createAccessTypeChart();
-            createFileTypeChart();
-            createTimelineChart();
-
-            // Populate tables
-            populateSitesList();
-            populateUsersList();
-            populateAccessTypesList();
-            populateApplicationsList();
-        }
-
-        // Tab navigation
-        function showTab(tabName) {
-            // Hide all tabs
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            document.querySelectorAll('.tab').forEach(btn => {
-                btn.classList.remove('active');
-            });
-
-            // Show selected tab
-            document.getElementById('tab-' + tabName).classList.add('active');
-            event.target.classList.add('active');
-        }
-
-        // Chart creation functions
-        function createTopSitesChart() {
-            const data = reportData.executive_summary.top_sites.slice(0, 10);
-            const ctx = document.getElementById('topSitesChart').getContext('2d');
-
-            charts.topSites = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: data.map(d => extractSiteName(d.site)),
-                    datasets: [{
-                        label: 'Operations',
-                        data: data.map(d => d.operations),
-                        backgroundColor: 'rgba(0, 120, 212, 0.8)',
-                        borderColor: 'rgba(0, 120, 212, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: { precision: 0 }
-                        }
-                    }
-                }
-            });
-        }
-
-        function createTopUsersChart() {
-            const data = reportData.executive_summary.top_users.slice(0, 10);
-            const ctx = document.getElementById('topUsersChart').getContext('2d');
-
-            charts.topUsers = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: data.map(d => d.user.split('@')[0]),
-                    datasets: [{
-                        label: 'Operations',
-                        data: data.map(d => d.operations),
-                        backgroundColor: 'rgba(16, 124, 16, 0.8)',
-                        borderColor: 'rgba(16, 124, 16, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: { precision: 0 }
-                        }
-                    }
-                }
-            });
-        }
-
-        function createAccessTypeChart() {
-            const data = reportData.executive_summary.access_type_distribution.slice(0, 8);
-            const ctx = document.getElementById('accessTypeChart').getContext('2d');
-
-            charts.accessType = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: data.map(d => d.type),
-                    datasets: [{
-                        data: data.map(d => d.count),
-                        backgroundColor: [
-                            'rgba(0, 120, 212, 0.8)',
-                            'rgba(16, 124, 16, 0.8)',
-                            'rgba(255, 140, 0, 0.8)',
-                            'rgba(216, 59, 1, 0.8)',
-                            'rgba(80, 230, 255, 0.8)',
-                            'rgba(185, 0, 185, 0.8)',
-                            'rgba(255, 185, 0, 0.8)',
-                            'rgba(0, 178, 148, 0.8)'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'right'
-                        }
-                    }
-                }
-            });
-        }
-
-        function createFileTypeChart() {
-            const data = reportData.executive_summary.file_type_distribution.slice(0, 10);
-            const ctx = document.getElementById('fileTypeChart').getContext('2d');
-
-            charts.fileType = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: data.map(d => d.type.toUpperCase() || 'Unknown'),
-                    datasets: [{
-                        label: 'Count',
-                        data: data.map(d => d.count),
-                        backgroundColor: 'rgba(255, 140, 0, 0.8)',
-                        borderColor: 'rgba(255, 140, 0, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    indexAxis: 'y',
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        x: {
-                            beginAtZero: true,
-                            ticks: { precision: 0 }
-                        }
-                    }
-                }
-            });
-        }
-
-        function createTimelineChart() {
-            const data = reportData.daily_operations;
-            const ctx = document.getElementById('timelineChart').getContext('2d');
-
-            charts.timeline = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: data.map(d => formatDate(d.date)),
-                    datasets: [{
-                        label: 'Daily Operations',
-                        data: data.map(d => d.count),
-                        borderColor: 'rgba(0, 120, 212, 1)',
-                        backgroundColor: 'rgba(0, 120, 212, 0.1)',
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: true }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: { precision: 0 }
-                        }
-                    }
-                }
-            });
-        }
-
-        // Populate sites list
-        function populateSitesList() {
-            const container = document.getElementById('sitesList');
-            const sites = reportData.site_activity;
-
-            let html = `
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Site</th>
-                            <th>Operations</th>
-                            <th>Users</th>
-                            <th>Files</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-
-            sites.forEach((site, index) => {
-                html += `
-                    <tr class="clickable" onclick="showSiteDetails(${index})">
-                        <td>${extractSiteName(site.site_url)}</td>
-                        <td>${formatNumber(site.total_operations)}</td>
-                        <td>${formatNumber(site.unique_users)}</td>
-                        <td>${formatNumber(site.unique_files)}</td>
-                    </tr>
-                `;
-            });
-
-            html += `
-                    </tbody>
-                </table>
-            `;
-
-            container.innerHTML = html;
-        }
-
-        // Populate users list
-        function populateUsersList() {
-            const container = document.getElementById('usersList');
-            const users = reportData.user_activity;
-
-            let html = `
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>User</th>
-                            <th>Operations</th>
-                            <th>Sites</th>
-                            <th>Files</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-
-            users.forEach((user, index) => {
-                html += `
-                    <tr class="clickable" onclick="showUserDetails(${index})">
-                        <td>${user.user_id}</td>
-                        <td>${formatNumber(user.total_operations)}</td>
-                        <td>${formatNumber(user.unique_sites)}</td>
-                        <td>${formatNumber(user.unique_files)}</td>
-                    </tr>
-                `;
-            });
-
-            html += `
-                    </tbody>
-                </table>
-            `;
-
-            container.innerHTML = html;
-        }
-
-        // Populate access types list
-        function populateAccessTypesList() {
-            const container = document.getElementById('accessTypesList');
-            const types = reportData.access_types;
-
-            let html = `
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Access Type</th>
-                            <th>Count</th>
-                            <th>Users</th>
-                            <th>Sites</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-
-            types.forEach(type => {
-                html += `
-                    <tr>
-                        <td><strong>${type.type}</strong></td>
-                        <td>${formatNumber(type.count)}</td>
-                        <td>${formatNumber(type.unique_users)}</td>
-                        <td>${formatNumber(type.unique_sites)}</td>
-                    </tr>
-                `;
-            });
-
-            html += `
-                    </tbody>
-                </table>
-            `;
-
-            container.innerHTML = html;
-        }
-
-        // Populate applications list
-        function populateApplicationsList() {
-            const container = document.getElementById('applicationsList');
-            const apps = reportData.applications;
-
-            let html = `
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Application</th>
-                            <th>Count</th>
-                            <th>Users</th>
-                            <th>Sites</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-
-            apps.forEach(app => {
-                html += `
-                    <tr>
-                        <td><strong>${app.application}</strong></td>
-                        <td>${formatNumber(app.count)}</td>
-                        <td>${formatNumber(app.unique_users)}</td>
-                        <td>${formatNumber(app.unique_sites)}</td>
-                    </tr>
-                `;
-            });
-
-            html += `
-                    </tbody>
-                </table>
-            `;
-
-            container.innerHTML = html;
-        }
-
-        // Show site details (drill-down)
-        function showSiteDetails(index) {
-            const site = reportData.site_activity[index];
-
-            // Hide main view, show detail view
-            document.getElementById('sitesMainView').classList.add('hidden');
-            document.getElementById('siteDetailView').classList.remove('hidden');
-
-            // Set title
-            document.getElementById('siteDetailTitle').textContent = extractSiteName(site.site_url);
-
-            // Build detail content
-            let html = `
-                <!-- Stats Cards -->
-                <div class="stats-grid" style="margin-bottom: 30px;">
-                    <div class="stat-card">
-                        <div class="stat-value">${formatNumber(site.total_operations)}</div>
-                        <div class="stat-label">Total Operations</div>
-                    </div>
-                    <div class="stat-card green">
-                        <div class="stat-value">${formatNumber(site.unique_users)}</div>
-                        <div class="stat-label">Unique Users</div>
-                    </div>
-                    <div class="stat-card orange">
-                        <div class="stat-value">${formatNumber(site.unique_files)}</div>
-                        <div class="stat-label">Unique Files</div>
-                    </div>
-                    <div class="stat-card red">
-                        <div class="stat-value">${site.file_types.length > 0 ? site.file_types[0].type.toUpperCase() : 'N/A'}</div>
-                        <div class="stat-label">Top File Type</div>
-                    </div>
-                </div>
-
-                <!-- Charts Row -->
-                <div class="chart-row" style="margin-bottom: 30px;">
-                    <div class="card">
-                        <div class="card-header">Top 10 Users</div>
-                        <div class="chart-container">
-                            <canvas id="siteUsersChart"></canvas>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <div class="card-header">Access Type Distribution</div>
-                        <div class="chart-container">
-                            <canvas id="siteAccessTypesChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- All Users Table -->
-                <div class="card" style="margin-bottom: 30px;">
-                    <div class="card-header">All Users (${site.top_users.length} Total)</div>
-                    <div id="siteUsersTable"></div>
-                </div>
-
-                <!-- All Files Tree -->
-                <div class="card" style="margin-bottom: 30px;">
-                    <div class="card-header">All Files (${site.top_files.length} Total)</div>
-                    <div id="siteFilesTree" class="file-tree"></div>
-                </div>
-
-                <!-- All Activity Table -->
-                <div class="card">
-                    <div class="card-header">All Activity (${site.file_details.length} Total Operations)</div>
-                    <div id="siteActivityTable"></div>
-                </div>
-            `;
-
-            document.getElementById('siteDetailContent').innerHTML = html;
-
-            // Create users table with pagination
-            window.currentSiteUsers = site.top_users;
-
-            function renderUsersTable(items) {
-                return `
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>User</th>
-                                <th>Operations</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${items.map(user => `
-                                <tr>
-                                    <td>${user.user}</td>
-                                    <td>${formatNumber(user.operations)}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-            }
-
-            createPagination('siteUsersTable', site.top_users, renderUsersTable, 20);
-
-            // Listen for pagination updates on users table
-            document.addEventListener('paginationUpdate', function(e) {
-                if (e.detail.containerId === 'siteUsersTable') {
-                    createPagination('siteUsersTable', window.currentSiteUsers, renderUsersTable,
-                        window.pagination_siteUsersTable.pageSize);
-                }
-            });
-
-            // Build and render file tree
-            // Store file details globally for user modal
-            window.currentSiteFileDetails = site.file_details;
-
-            const filesWithPaths = site.top_files.map(f => {
-                const parts = f.file.split('/');
-                const fileName = parts.pop();
-                const filePath = parts.join('/');
-                return {
-                    file_path: filePath,
-                    file_name: fileName,
-                    file: f.file,
-                    operations: f.operations
-                };
-            });
-            const fileTree = buildFileTree(filesWithPaths);
-            document.getElementById('siteFilesTree').innerHTML = renderFileTree(fileTree, 0, 'siteFiles', site.file_details);
-
-            // Create activity table with pagination
-            const sortedDetails = [...site.file_details].sort((a, b) =>
-                new Date(b.timestamp) - new Date(a.timestamp)
-            );
-
-            // Store reference for pagination re-render
-            window.currentSiteDetails = sortedDetails;
-
-            function renderActivityTable(items) {
-                return `
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Timestamp</th>
-                                <th>User</th>
-                                <th>File</th>
-                                <th>Operation</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${items.map(detail => `
-                                <tr>
-                                    <td>${formatDate(detail.timestamp)}</td>
-                                    <td>${detail.user_id || 'Unknown'}</td>
-                                    <td><small>${detail.file_path}/<strong>${detail.file_name}</strong></small></td>
-                                    <td><span style="background: var(--border-color); padding: 4px 8px; border-radius: 4px; font-size: 0.9em;">${detail.operation}</span></td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-            }
-
-            createPagination('siteActivityTable', sortedDetails, renderActivityTable, 20);
-
-            // Listen for pagination updates
-            document.addEventListener('paginationUpdate', function(e) {
-                if (e.detail.containerId === 'siteActivityTable') {
-                    createPagination('siteActivityTable', window.currentSiteDetails, renderActivityTable,
-                        window.pagination_siteActivityTable.pageSize);
-                }
-            });
-
-            // Create charts
-            createSiteDetailCharts(site);
-        }
-
-        // Create charts for site detail view
-        function createSiteDetailCharts(site) {
-            // Top Users Chart
-            const usersCtx = document.getElementById('siteUsersChart').getContext('2d');
-            if (charts.siteUsers) charts.siteUsers.destroy();
-
-            charts.siteUsers = new Chart(usersCtx, {
-                type: 'bar',
-                data: {
-                    labels: site.top_users.slice(0, 10).map(u => u.user.split('@')[0]),
-                    datasets: [{
-                        label: 'Operations',
-                        data: site.top_users.slice(0, 10).map(u => u.operations),
-                        backgroundColor: 'rgba(16, 124, 16, 0.8)',
-                        borderColor: 'rgba(16, 124, 16, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { beginAtZero: true, ticks: { precision: 0 } }
-                    }
-                }
-            });
-
-            // Access Types Chart
-            const accessCtx = document.getElementById('siteAccessTypesChart').getContext('2d');
-            if (charts.siteAccessTypes) charts.siteAccessTypes.destroy();
-
-            charts.siteAccessTypes = new Chart(accessCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: site.access_types.slice(0, 8).map(a => a.type),
-                    datasets: [{
-                        data: site.access_types.slice(0, 8).map(a => a.count),
-                        backgroundColor: [
-                            'rgba(0, 120, 212, 0.8)',
-                            'rgba(16, 124, 16, 0.8)',
-                            'rgba(255, 140, 0, 0.8)',
-                            'rgba(216, 59, 1, 0.8)',
-                            'rgba(80, 230, 255, 0.8)',
-                            'rgba(185, 0, 185, 0.8)',
-                            'rgba(255, 185, 0, 0.8)',
-                            'rgba(0, 178, 148, 0.8)'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: 'right' } }
-                }
-            });
-        }
-
-        // Close site detail view
-        function closeSiteDetail() {
-            document.getElementById('siteDetailView').classList.add('hidden');
-            document.getElementById('sitesMainView').classList.remove('hidden');
-        }
-
-        // Show user details (drill-down)
-        function showUserDetails(index) {
-            const user = reportData.user_activity[index];
-
-            // Hide main view, show detail view
-            document.getElementById('usersMainView').classList.add('hidden');
-            document.getElementById('userDetailView').classList.remove('hidden');
-
-            // Set title
-            document.getElementById('userDetailTitle').textContent = user.user_id;
-
-            // Build detail content
-            let html = `
-                <!-- Stats Cards -->
-                <div class="stats-grid" style="margin-bottom: 30px;">
-                    <div class="stat-card">
-                        <div class="stat-value">${formatNumber(user.total_operations)}</div>
-                        <div class="stat-label">Total Operations</div>
-                    </div>
-                    <div class="stat-card green">
-                        <div class="stat-value">${formatNumber(user.unique_sites)}</div>
-                        <div class="stat-label">Sites Accessed</div>
-                    </div>
-                    <div class="stat-card orange">
-                        <div class="stat-value">${formatNumber(user.unique_files)}</div>
-                        <div class="stat-label">Unique Files</div>
-                    </div>
-                    <div class="stat-card red">
-                        <div class="stat-value">${user.access_types.length > 0 ? user.access_types[0].type : 'N/A'}</div>
-                        <div class="stat-label">Top Access Type</div>
-                    </div>
-                </div>
-
-                <!-- Charts Row -->
-                <div class="chart-row" style="margin-bottom: 30px;">
-                    <div class="card">
-                        <div class="card-header">Top 10 Sites Accessed</div>
-                        <div class="chart-container">
-                            <canvas id="userSitesChart"></canvas>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <div class="card-header">Access Type Distribution</div>
-                        <div class="chart-container">
-                            <canvas id="userAccessTypesChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- All Sites Table -->
-                <div class="card" style="margin-bottom: 30px;">
-                    <div class="card-header">All Sites (${user.top_sites.length} Total)</div>
-                    <div id="userSitesTable"></div>
-                </div>
-
-                <!-- All Files Tree -->
-                <div class="card" style="margin-bottom: 30px;">
-                    <div class="card-header">All Files (${user.top_files.length} Total)</div>
-                    <div id="userFilesTree" class="file-tree"></div>
-                </div>
-
-                <!-- All Activity Table -->
-                <div class="card">
-                    <div class="card-header">All Activity (${user.file_details.length} Total Operations)</div>
-                    <div id="userActivityTable"></div>
-                </div>
-            `;
-
-            document.getElementById('userDetailContent').innerHTML = html;
-
-            // Create sites table with pagination
-            window.currentUserSites = user.top_sites;
-
-            function renderUserSitesTable(items) {
-                return `
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Site</th>
-                                <th>Operations</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${items.map(site => `
-                                <tr>
-                                    <td>${extractSiteName(site.site)}</td>
-                                    <td>${formatNumber(site.operations)}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-            }
-
-            createPagination('userSitesTable', user.top_sites, renderUserSitesTable, 20);
-
-            // Listen for pagination updates on sites table
-            document.addEventListener('paginationUpdate', function(e) {
-                if (e.detail.containerId === 'userSitesTable') {
-                    createPagination('userSitesTable', window.currentUserSites, renderUserSitesTable,
-                        window.pagination_userSitesTable.pageSize);
-                }
-            });
-
-            // Build and render file tree with site grouping
-            // Store file details globally for user modal
-            window.currentSiteFileDetails = user.file_details;
-
-            const filesWithSites = user.top_files.map(file => {
-                const fileRecord = user.file_details.find(r => `${r.file_path}/${r.file_name}` === file.file);
-                const siteName = fileRecord ? extractSiteName(fileRecord.site_url) : 'Unknown';
-                const parts = file.file.split('/');
-                const fileName = parts.pop();
-                const filePath = `${siteName}/${parts.join('/')}`;
-
-                return {
-                    file_path: filePath,
-                    file_name: fileName,
-                    file: file.file,
-                    operations: file.operations
-                };
-            });
-            const userFileTree = buildFileTree(filesWithSites);
-            document.getElementById('userFilesTree').innerHTML = renderFileTree(userFileTree, 0, 'userFiles', user.file_details);
-
-            // Create activity table with pagination
-            const sortedDetails = [...user.file_details].sort((a, b) =>
-                new Date(b.timestamp) - new Date(a.timestamp)
-            );
-
-            // Store reference for pagination re-render
-            window.currentUserDetails = sortedDetails;
-
-            function renderUserActivityTable(items) {
-                return `
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Timestamp</th>
-                                <th>Site</th>
-                                <th>File</th>
-                                <th>Operation</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${items.map(detail => `
-                                <tr>
-                                    <td>${formatDate(detail.timestamp)}</td>
-                                    <td><small>${extractSiteName(detail.site_url)}</small></td>
-                                    <td><small><strong>${extractSiteName(detail.site_url)}</strong>: ${detail.file_path}/<strong>${detail.file_name}</strong></small></td>
-                                    <td><span style="background: var(--border-color); padding: 4px 8px; border-radius: 4px; font-size: 0.9em;">${detail.operation}</span></td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
-            }
-
-            createPagination('userActivityTable', sortedDetails, renderUserActivityTable, 20);
-
-            // Listen for pagination updates on activity table
-            document.addEventListener('paginationUpdate', function(e) {
-                if (e.detail.containerId === 'userActivityTable') {
-                    createPagination('userActivityTable', window.currentUserDetails, renderUserActivityTable,
-                        window.pagination_userActivityTable.pageSize);
-                }
-            });
-
-            // Create charts
-            createUserDetailCharts(user);
-        }
-
-        // Create charts for user detail view
-        function createUserDetailCharts(user) {
-            // Top Sites Chart
-            const sitesCtx = document.getElementById('userSitesChart').getContext('2d');
-            if (charts.userSites) charts.userSites.destroy();
-
-            charts.userSites = new Chart(sitesCtx, {
-                type: 'bar',
-                data: {
-                    labels: user.top_sites.slice(0, 10).map(s => extractSiteName(s.site)),
-                    datasets: [{
-                        label: 'Operations',
-                        data: user.top_sites.slice(0, 10).map(s => s.operations),
-                        backgroundColor: 'rgba(0, 120, 212, 0.8)',
-                        borderColor: 'rgba(0, 120, 212, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        y: { beginAtZero: true, ticks: { precision: 0 } }
-                    }
-                }
-            });
-
-            // Access Types Chart
-            const accessCtx = document.getElementById('userAccessTypesChart').getContext('2d');
-            if (charts.userAccessTypes) charts.userAccessTypes.destroy();
-
-            charts.userAccessTypes = new Chart(accessCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: user.access_types.slice(0, 8).map(a => a.type),
-                    datasets: [{
-                        data: user.access_types.slice(0, 8).map(a => a.count),
-                        backgroundColor: [
-                            'rgba(0, 120, 212, 0.8)',
-                            'rgba(16, 124, 16, 0.8)',
-                            'rgba(255, 140, 0, 0.8)',
-                            'rgba(216, 59, 1, 0.8)',
-                            'rgba(80, 230, 255, 0.8)',
-                            'rgba(185, 0, 185, 0.8)',
-                            'rgba(255, 185, 0, 0.8)',
-                            'rgba(0, 178, 148, 0.8)'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { position: 'right' } }
-                }
-            });
-        }
-
-        // Close user detail view
-        function closeUserDetail() {
-            document.getElementById('userDetailView').classList.add('hidden');
-            document.getElementById('usersMainView').classList.remove('hidden');
-        }
-
-        // Filter functions
-        function filterSites() {
-            const search = document.getElementById('siteSearch').value.toLowerCase();
-            const rows = document.querySelectorAll('#sitesList tbody tr');
-
-            rows.forEach(row => {
-                const text = row.textContent.toLowerCase();
-                row.style.display = text.includes(search) ? '' : 'none';
-            });
-        }
-
-        function filterUsers() {
-            const search = document.getElementById('userSearch').value.toLowerCase();
-            const rows = document.querySelectorAll('#usersList tbody tr');
-
-            rows.forEach(row => {
-                const text = row.textContent.toLowerCase();
-                row.style.display = text.includes(search) ? '' : 'none';
-            });
-        }
-
-        // Export to PDF
-        async function exportToPDF() {
-            const button = event.target;
-            button.disabled = true;
-            button.textContent = '⏳ Generating PDF...';
-
-            try {
-                const { jsPDF } = window.jspdf;
-                const pdf = new jsPDF('p', 'mm', 'a4');
-                const pageWidth = pdf.internal.pageSize.getWidth();
-                const pageHeight = pdf.internal.pageSize.getHeight();
-                let yPosition = 20;
-
-                // Title Page
-                pdf.setFontSize(24);
-                pdf.setTextColor(0, 120, 212);
-                pdf.text('Purview Audit Report', pageWidth / 2, yPosition, { align: 'center' });
-
-                yPosition += 15;
-                pdf.setFontSize(12);
-                pdf.setTextColor(96, 94, 92);
-                const dateRange = reportData.metadata.date_range;
-                pdf.text(`Report Period: ${formatDate(dateRange.start)} to ${formatDate(dateRange.end)}`, pageWidth / 2, yPosition, { align: 'center' });
-
-                yPosition += 10;
-                pdf.text(`Generated: ${new Date().toLocaleDateString()}`, pageWidth / 2, yPosition, { align: 'center' });
-
-                // Summary Statistics
-                yPosition += 20;
-                pdf.setFontSize(16);
-                pdf.setTextColor(50, 49, 48);
-                pdf.text('Executive Summary', 20, yPosition);
-
-                yPosition += 10;
-                pdf.setFontSize(11);
-                pdf.text(`Total File Operations: ${formatNumber(reportData.metadata.total_operations)}`, 20, yPosition);
-
-                yPosition += 7;
-                pdf.text(`Unique Users: ${formatNumber(reportData.metadata.unique_users)}`, 20, yPosition);
-
-                yPosition += 7;
-                pdf.text(`Unique Sites: ${formatNumber(reportData.metadata.unique_sites)}`, 20, yPosition);
-
-                yPosition += 7;
-                pdf.text(`Unique Files: ${formatNumber(reportData.metadata.unique_files)}`, 20, yPosition);
-
-                // Top Sites
-                yPosition += 15;
-                pdf.setFontSize(14);
-                pdf.text('Top 10 Most Active Sites', 20, yPosition);
-
-                yPosition += 8;
-                pdf.setFontSize(10);
-                reportData.executive_summary.top_sites.slice(0, 10).forEach((site, index) => {
-                    if (yPosition > pageHeight - 20) {
-                        pdf.addPage();
-                        yPosition = 20;
-                    }
-                    const siteName = extractSiteName(site.site);
-                    pdf.text(`${index + 1}. ${siteName}: ${formatNumber(site.operations)} operations`, 25, yPosition);
-                    yPosition += 6;
-                });
-
-                // Top Users
-                yPosition += 10;
-                pdf.setFontSize(14);
-                pdf.text('Top 10 Most Active Users', 20, yPosition);
-
-                yPosition += 8;
-                pdf.setFontSize(10);
-                reportData.executive_summary.top_users.slice(0, 10).forEach((user, index) => {
-                    if (yPosition > pageHeight - 20) {
-                        pdf.addPage();
-                        yPosition = 20;
-                    }
-                    pdf.text(`${index + 1}. ${user.user}: ${formatNumber(user.operations)} operations`, 25, yPosition);
-                    yPosition += 6;
-                });
-
-                // Access Types
-                pdf.addPage();
-                yPosition = 20;
-                pdf.setFontSize(14);
-                pdf.text('Access Type Distribution', 20, yPosition);
-
-                yPosition += 8;
-                pdf.setFontSize(10);
-                reportData.access_types.forEach((type, index) => {
-                    if (yPosition > pageHeight - 20) {
-                        pdf.addPage();
-                        yPosition = 20;
-                    }
-                    const percentage = ((type.count / reportData.metadata.total_operations) * 100).toFixed(1);
-                    pdf.text(`${type.type}: ${formatNumber(type.count)} (${percentage}%)`, 25, yPosition);
-                    yPosition += 6;
-                });
-
-                // Save PDF
-                pdf.save(`purview-audit-report-${new Date().toISOString().split('T')[0]}.pdf`);
-
-                button.disabled = false;
-                button.textContent = '📄 Export to PDF';
-
-                // Show success message
-                setTimeout(() => {
-                    alert('✅ PDF report generated successfully!');
-                }, 300);
-
-            } catch (error) {
-                console.error('Error generating PDF:', error);
-                alert('Error generating PDF. Please check the console for details.');
-                button.disabled = false;
-                button.textContent = '📄 Export to PDF';
-            }
-        }
-
-        // File Tree Functions
-        function buildFileTree(files) {
-            const tree = {};
-
-            files.forEach(file => {
-                const parts = file.file_path ? file.file_path.split('/').filter(p => p) : [];
-                let current = tree;
-
-                // Build folder structure
-                parts.forEach((part, index) => {
-                    if (!current[part]) {
-                        current[part] = {
-                            type: 'folder',
-                            name: part,
-                            children: {},
-                            files: [],
-                            operations: 0
-                        };
-                    }
-                    current[part].operations += file.operations || 1;
-                    current = current[part].children;
-                });
-
-                // Add file to final folder
-                if (!current.__files) {
-                    current.__files = [];
-                }
-                current.__files.push({
-                    name: file.file_name || file.file,
-                    operations: file.operations || 1,
-                    fullPath: file.file
-                });
-            });
-
-            return tree;
-        }
-
-        function renderFileTree(tree, level = 0, parentId = '', fileDetails = [], pathPrefix = '') {
-            let html = '';
-            const entries = Object.entries(tree)
-                .filter(([key]) => key !== '__files')
-                .sort((a, b) => b[1].operations - a[1].operations); // Sort by operations (highest first)
-
-            // Render folders
-            entries.forEach(([name, node], index) => {
-                const nodeId = `${parentId}_${level}_${index}`;
-                const hasChildren = Object.keys(node.children).length > 0 || node.children.__files?.length > 0;
-                const folderPath = pathPrefix ? `${pathPrefix}/${name}` : name;
-
-                html += `
-                    <div class="tree-item" style="padding-left: ${level * 20}px;">
-                        <div class="tree-folder">
-                            <span class="tree-folder-icon" id="icon_${nodeId}" onclick="toggleTreeNode('${nodeId}')">
-                                ${hasChildren ? '▶' : '📄'}
-                            </span>
-                            <span class="tree-folder-name" onclick="toggleTreeNode('${nodeId}')">📁 ${name}</span>
-                            <div class="tree-folder-stats">
-                                <span>${formatNumber(node.operations)} operations</span>
-                                <span class="tree-user-icon" onclick="event.stopPropagation(); showUsersForPath('${folderPath.replace(/'/g, "\\'")}/', window.currentSiteFileDetails, true)" title="Show users">
-                                    👤
-                                </span>
-                            </div>
-                        </div>
-                        <div class="tree-children" id="children_${nodeId}">
-                            ${hasChildren ? renderFileTree(node.children, level + 1, nodeId, fileDetails, folderPath) : ''}
-                        </div>
-                    </div>
-                `;
-            });
-
-            // Render files in current folder (sorted by operations)
-            if (tree.__files && tree.__files.length > 0) {
-                const sortedFiles = [...tree.__files].sort((a, b) => b.operations - a.operations);
-                sortedFiles.forEach(file => {
-                    const filePath = file.fullPath || file.name;
-                    html += `
-                        <div class="tree-file" style="padding-left: ${(level + 1) * 20}px;">
-                            <span class="tree-file-icon">📄</span>
-                            <span class="tree-file-name">${file.name}</span>
-                            <span class="tree-file-count">${formatNumber(file.operations)} ops</span>
-                            <span class="tree-user-icon" onclick="showUsersForPath('${filePath.replace(/'/g, "\\'")}', window.currentSiteFileDetails, false)" title="Show users">
-                                👤
-                            </span>
-                        </div>
-                    `;
-                });
-            }
-
-            return html;
-        }
-
-        function toggleTreeNode(nodeId) {
-            const children = document.getElementById(`children_${nodeId}`);
-            const icon = document.getElementById(`icon_${nodeId}`);
-
-            if (children && icon) {
-                if (children.classList.contains('expanded')) {
-                    children.classList.remove('expanded');
-                    icon.textContent = '▶';
-                } else {
-                    children.classList.add('expanded');
-                    icon.textContent = '▼';
-                }
-            }
-        }
-
-        // Pagination Functions
-        function createPagination(containerId, items, renderFunction, itemsPerPage = 20) {
-            const state = {
-                currentPage: 1,
-                pageSize: itemsPerPage,
-                totalItems: items.length
-            };
-
-            window[`pagination_${containerId}`] = state;
-
-            function render() {
-                const start = (state.currentPage - 1) * state.pageSize;
-                const end = state.pageSize === -1 ? items.length : start + state.pageSize;
-                const pageItems = items.slice(start, end);
-                const totalPages = state.pageSize === -1 ? 1 : Math.ceil(items.length / state.pageSize);
-
-                // Render items
-                const container = document.getElementById(containerId);
-                container.innerHTML = renderFunction(pageItems);
-
-                // Render pagination controls
-                const paginationHtml = `
-                    <div class="pagination-controls">
-                        <div class="pagination-info">
-                            Showing ${start + 1}-${Math.min(end, items.length)} of ${items.length} items
-                        </div>
-                        <div class="pagination-buttons">
-                            <button onclick="paginationGoToPage('${containerId}', ${state.currentPage - 1})"
-                                    ${state.currentPage === 1 ? 'disabled' : ''}>
-                                Previous
-                            </button>
-                            ${generatePageButtons(containerId, state.currentPage, totalPages)}
-                            <button onclick="paginationGoToPage('${containerId}', ${state.currentPage + 1})"
-                                    ${state.currentPage === totalPages || state.pageSize === -1 ? 'disabled' : ''}>
-                                Next
-                            </button>
-                        </div>
-                        <div class="page-size-selector">
-                            <label>Show:</label>
-                            <select onchange="paginationChangePageSize('${containerId}', this.value)">
-                                <option value="20" ${state.pageSize === 20 ? 'selected' : ''}>20</option>
-                                <option value="100" ${state.pageSize === 100 ? 'selected' : ''}>100</option>
-                                <option value="-1" ${state.pageSize === -1 ? 'selected' : ''}>All</option>
-                            </select>
-                        </div>
-                    </div>
-                `;
-
-                container.insertAdjacentHTML('beforeend', paginationHtml);
-            }
-
-            render();
-            return state;
-        }
-
-        function generatePageButtons(containerId, currentPage, totalPages) {
-            if (totalPages <= 1) return '';
-
-            let html = '';
-            const maxButtons = 5;
-            let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
-            let endPage = Math.min(totalPages, startPage + maxButtons - 1);
-
-            if (endPage - startPage < maxButtons - 1) {
-                startPage = Math.max(1, endPage - maxButtons + 1);
-            }
-
-            for (let i = startPage; i <= endPage; i++) {
-                html += `
-                    <button onclick="paginationGoToPage('${containerId}', ${i})"
-                            class="${i === currentPage ? 'active' : ''}">
-                        ${i}
-                    </button>
-                `;
-            }
-
-            return html;
-        }
-
-        function paginationGoToPage(containerId, page) {
-            const state = window[`pagination_${containerId}`];
-            if (!state) return;
-
-            const totalPages = Math.ceil(state.totalItems / state.pageSize);
-            state.currentPage = Math.max(1, Math.min(page, totalPages));
-
-            // Re-render by triggering the original render function
-            const event = new CustomEvent('paginationUpdate', { detail: { containerId } });
-            document.dispatchEvent(event);
-        }
-
-        function paginationChangePageSize(containerId, size) {
-            const state = window[`pagination_${containerId}`];
-            if (!state) return;
-
-            state.pageSize = parseInt(size);
-            state.currentPage = 1;
-
-            // Re-render
-            const event = new CustomEvent('paginationUpdate', { detail: { containerId } });
-            document.dispatchEvent(event);
-        }
-
-        // User Modal Functions
-        function showUsersForPath(path, fileDetails, isFolder = false) {
-            const userCounts = {};
-
-            // Filter file details by path
-            fileDetails.forEach(detail => {
-                const detailPath = `${detail.file_path}/${detail.file_name}`;
-
-                // For folders, match if the path starts with the folder path
-                // For files, exact match
-                const matches = isFolder
-                    ? detailPath.startsWith(path)
-                    : detailPath === path;
-
-                if (matches) {
-                    if (!userCounts[detail.user_id]) {
-                        userCounts[detail.user_id] = 0;
-                    }
-                    userCounts[detail.user_id]++;
-                }
-            });
-
-            // Sort by operation count
-            const sortedUsers = Object.entries(userCounts)
-                .sort((a, b) => b[1] - a[1])
-                .map(([user, count]) => ({ user, count }));
-
-            // Show modal
-            const modal = document.getElementById('userModal');
-            const modalTitle = document.getElementById('modalTitle');
-            const modalBody = document.getElementById('modalBody');
-
-            const fileName = path.split('/').pop();
-            modalTitle.textContent = `Users accessing: ${fileName}`;
-
-            if (sortedUsers.length === 0) {
-                modalBody.innerHTML = '<p style="color: var(--text-secondary); text-align: center;">No users found</p>';
-            } else {
-                modalBody.innerHTML = `
-                    <div style="margin-bottom: 15px; color: var(--text-secondary);">
-                        <strong>${sortedUsers.length}</strong> user${sortedUsers.length !== 1 ? 's' : ''}
-                        • <strong>${formatNumber(sortedUsers.reduce((sum, u) => sum + u.count, 0))}</strong> total operations
-                    </div>
-                    ${sortedUsers.map(u => `
-                        <div class="user-list-item">
-                            <span class="user-name">👤 ${u.user}</span>
-                            <span class="user-ops">${formatNumber(u.count)} ops</span>
-                        </div>
-                    `).join('')}
-                `;
-            }
-
-            modal.classList.add('active');
-        }
-
-        function closeUserModal() {
-            const modal = document.getElementById('userModal');
-            modal.classList.remove('active');
-        }
-
-        // Close modal when clicking outside
-        window.onclick = function(event) {
-            const modal = document.getElementById('userModal');
-            if (event.target === modal) {
-                closeUserModal();
-            }
-        }
-
-        // Utility functions
-        function formatNumber(num) {
-            return num.toLocaleString();
-        }
-
-        function formatDate(dateStr) {
-            if (!dateStr) return 'N/A';
-            const date = new Date(dateStr.trim());
-            if (isNaN(date.getTime())) return 'Invalid Date';
-            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-        }
-
-        function extractSiteName(url) {
-            if (!url || url === 'Unknown') return 'Unknown';
-
-            try {
-                const urlObj = new URL(url);
-                const parts = urlObj.pathname.split('/').filter(p => p);
-
-                if (urlObj.hostname.includes('-my.sharepoint.com')) {
-                    // Personal OneDrive
-                    const user = parts[parts.length - 1] || 'OneDrive';
-                    return `OneDrive (${user})`;
-                } else if (parts.length > 1 && parts[0] === 'sites') {
-                    // SharePoint site
-                    return parts[1];
-                } else {
-                    return urlObj.hostname.split('.')[0];
-                }
-            } catch {
-                return url.substring(0, 50) + '...';
-            }
-        }
-
-        // Dashboard is ready - waiting for user to select CSV file
-    </script>
 </body>
 </html>

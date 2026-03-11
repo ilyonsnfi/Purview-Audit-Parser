@@ -609,6 +609,10 @@ header .subtitle {
 }
 
 /* ===== UTILITY CLASSES ===== */
+[x-cloak] {
+    display: none !important;
+}
+
 .hidden {
     display: none !important;
 }

@@ -38,16 +38,14 @@
                     <h2 class="loading-title">Load Purview Audit Data</h2>
                     <p class="loading-description">
                         Select a CSV file:<br>
-                        <strong>• Raw Purview audit log export</strong> (will be parsed in browser)<br>
-                        <strong>• Pre-parsed CSV</strong> from parse_purview_audit_log.py
+                        <strong>• Raw Purview audit log export</strong><br>
                     </p>
                     <input type="file" ref="fileInput" accept=".csv" class="hidden" @change="handleFileSelect($event)">
                     <button class="btn btn-primary file-input-btn" @click="$refs.fileInput.click()">
                         📂 Select CSV File
                     </button>
                     <p class="loading-note">
-                        <strong>Note:</strong> Everything runs in your browser!<br>
-                        No Python scripts required - just upload your raw Purview log.
+                        <strong>Local processing only.</strong> Everything runs in your browser!<br>
                     </p>
                 </div>
             </div>
@@ -417,6 +415,23 @@
 
     </div>
 
-    <script src="dashboard.js"></script>
+    <!-- Config and utilities -->
+    <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
+
+    <!-- Shared functionality -->
+    <script src="js/shared/data-processor.js"></script>
+    <script src="js/shared/navigation.js"></script>
+    <script src="js/shared/components.js"></script>
+
+    <!-- Tab-specific modules -->
+    <script src="js/tabs/executive-summary.js"></script>
+    <script src="js/tabs/site-activity.js"></script>
+    <script src="js/tabs/user-activity.js"></script>
+    <script src="js/tabs/access-types.js"></script>
+    <script src="js/tabs/applications.js"></script>
+
+    <!-- Main app -->
+    <script src="js/app.js"></script>
 </body>
 </html>

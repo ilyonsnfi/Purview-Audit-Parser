@@ -94,6 +94,26 @@ function getHumanReadableAccessType(rawType) {
         type = type.substring(4);
     }
 
+    // Further consolidations (after "File" prefix removed)
+    // Combine sync operations with their base operations
+    if (type === 'SyncDownloadedFull') {
+        type = 'Downloaded';
+    }
+    if (type === 'SyncUploadedFull' || type === 'UploadedPartial') {
+        type = 'Uploaded';
+    }
+
+    // Combine similar operations
+    if (type === 'Previewed') {
+        type = 'Accessed';
+    }
+    if (type === 'Renamed') {
+        type = 'Modified';
+    }
+    if (type === 'Recycled') {
+        type = 'Deleted';
+    }
+
     return type;
 }
 

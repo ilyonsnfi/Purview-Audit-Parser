@@ -199,9 +199,11 @@ function analyzeData(data) {
             }
         }
 
-        // Site data
-        if (!siteData[siteUrl]) {
-            siteData[siteUrl] = {
+        // Site data - group by extracted site name instead of full URL
+        const siteName = extractSiteName(siteUrl);
+        if (!siteData[siteName]) {
+            siteData[siteName] = {
+                site_url: siteUrl,  // Store first URL encountered for this site name
                 operations: 0,
                 users: new Set(),
                 files: new Set(),
@@ -211,13 +213,13 @@ function analyzeData(data) {
                 records: []
             };
         }
-        siteData[siteUrl].operations++;
-        siteData[siteUrl].users.add(userId);
-        siteData[siteUrl].files.add(fileKey);
-        siteData[siteUrl].accessTypes[operation] = (siteData[siteUrl].accessTypes[operation] || 0) + 1;
-        siteData[siteUrl].applications[application] = (siteData[siteUrl].applications[application] || 0) + 1;
-        if (fileExt) siteData[siteUrl].fileTypes[fileExt] = (siteData[siteUrl].fileTypes[fileExt] || 0) + 1;
-        siteData[siteUrl].records.push(row);
+        siteData[siteName].operations++;
+        siteData[siteName].users.add(userId);
+        siteData[siteName].files.add(fileKey);
+        siteData[siteName].accessTypes[operation] = (siteData[siteName].accessTypes[operation] || 0) + 1;
+        siteData[siteName].applications[application] = (siteData[siteName].applications[application] || 0) + 1;
+        if (fileExt) siteData[siteName].fileTypes[fileExt] = (siteData[siteName].fileTypes[fileExt] || 0) + 1;
+        siteData[siteName].records.push(row);
 
         // User data
         if (!userData[userId]) {
@@ -273,7 +275,7 @@ function analyzeData(data) {
     });
 
     // Convert to arrays and sort
-    const siteActivity = Object.entries(siteData).map(([url, data]) => {
+    const siteActivity = Object.entries(siteData).map(([siteName, data]) => {
         const userCounts = {};
         data.records.forEach(r => {
             userCounts[r.user_id] = (userCounts[r.user_id] || 0) + 1;
@@ -292,7 +294,7 @@ function analyzeData(data) {
             .map(([file, count]) => ({ file, operations: count }));
 
         return {
-            site_url: url,
+            site_url: data.site_url,  // Use the stored URL from the data object
             total_operations: data.operations,
             unique_users: data.users.size,
             unique_files: data.files.size,

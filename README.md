@@ -13,7 +13,7 @@ Analyze Microsoft Purview audit logs and visualize SharePoint file activity.
 3. **Click "Record type"** dropdown → Select **only** "SharePoint file operations"
 4. **Click "Activities"** dropdown → Paste this entire list:
    ```
-   FileAccessed, FileAccessedExtended, FileDeleted, FileDownloaded, FileModified, FileModifiedExtended, FileMoved, FilePreviewed, FileRecycled, FileRenamed, FileSyncDownloadedFull, FileSyncUploadedFull, FileUploaded, FileUploadedPartial, FileVersionsAllDeleted
+   FileAccessed, FileAccessedExtended, FileDeleted, FileDownloaded, FileModified, FileModifiedExtended, FileMoved, FilePreviewed, FileRecycled, FileRenamed, FileSyncDownloadedFull, FileSyncUploadedFull, FileUploaded, FileUploadedPartial, FileVersionsAllDeleted, SharingInvitationCreated, SharingInvitationAccepted, AnonymousLinkCreated, AnonymousLinkUsed, SecureLinkCreated, AddedToSecureLink
    ```
 5. **Click "Workload"** dropdown → Search for and select "SharePoint"
 6. Click **Search**, wait for results
@@ -22,25 +22,11 @@ Analyze Microsoft Purview audit logs and visualize SharePoint file activity.
 
 Note: this process can take hours, depending on the size of your search.
 
-### Step 2: Parse the CSV
-
-```bash
-python parse_purview_audit_log.py your_export.csv
-```
-
-Creates `your_export_file_access_report.csv` with clean file operations data.
-
-### Step 3: View Dashboard
+### Step 2: View Dashboard
 
 View the dashboard at https://ilyonsnfi.github.io/Purview-Audit-Parser/
 
-Double click the `index.html` file, or from the terminal of your choice run
-```bash
-open index.html  # macOS
-start index.html  # Windows
-```
-
-Click **"Select CSV file"** → choose the `_file_access_report.csv` file.
+Click **"Select CSV file"** → choose the `.csv` file you exported from Purview
 
 Done! 🎉
 
@@ -56,28 +42,9 @@ Done! 🎉
 ### Key Features
 
 - File tree view with folder aggregation
-- Pagination (20, 100, All)
 - Search for sites/users/files
 - Click 👤 icons to see who accessed files/folders
 - Sort tables by any column
-
-## Requirements
-
-- Python 3.6+ (no libraries needed)
-- Modern browser
-- Purview access (Audit Logs role)
-
-## Example
-
-```bash
-# You exported: audit_feb_2025.csv
-
-python parse_purview_audit_log.py audit_feb_2025.csv
-# Creates: audit_feb_2025_file_access_report.csv
-
-open index.html
-# Load the CSV in browser
-```
 
 ## Tracked Operations
 

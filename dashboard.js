@@ -20,6 +20,9 @@ const vueAppConfig = {
             applicationDetailIndex: null,
             accessTypeDetailIndex: null,
 
+            // Navigation history for cross-tab navigation
+            navigationHistory: [],
+
             // Access Type View Toggles (true = human-readable, false = raw)
             showHumanReadableAccessTypes: {
                 siteActivity: true,
@@ -30,12 +33,26 @@ const vueAppConfig = {
 
             // Search and Pagination State
             searchQueries: {
-                siteActivity: { users: '', accessTypes: '', applications: '', files: '' },
-                userActivity: { accessTypes: '', applications: '', files: '' },
+                sites: { main: '' },  // For main Site Activity overview
+                users: { main: '' },  // For main User Activity overview
                 accessTypes: { main: '', users: '', applications: '', files: '' },
-                applications: { users: '', accessTypes: '', files: '' }
+                applications: { main: '', users: '', accessTypes: '', files: '' },  // For main Applications overview
+                siteActivity: { users: '', accessTypes: '', applications: '', files: '' },  // For site drill-down
+                userActivity: { accessTypes: '', applications: '', files: '' }  // For user drill-down
             },
             pagination: {
+                sites: { main: { page: 1, perPage: 50 } },  // For main Site Activity overview
+                users: { main: { page: 1, perPage: 50 } },  // For main User Activity overview
+                accessTypes: {
+                    main: { page: 1, perPage: 50 },
+                    users: { page: 1, perPage: 20 },
+                    applications: { page: 1, perPage: 20 }
+                },
+                applications: {
+                    main: { page: 1, perPage: 50 },  // For main Applications overview
+                    users: { page: 1, perPage: 20 },
+                    accessTypes: { page: 1, perPage: 20 }
+                },
                 siteActivity: {
                     users: { page: 1, perPage: 20 },
                     accessTypes: { page: 1, perPage: 20 },
@@ -44,15 +61,6 @@ const vueAppConfig = {
                 userActivity: {
                     accessTypes: { page: 1, perPage: 20 },
                     applications: { page: 1, perPage: 20 }
-                },
-                accessTypes: {
-                    main: { page: 1, perPage: 50 },
-                    users: { page: 1, perPage: 20 },
-                    applications: { page: 1, perPage: 20 }
-                },
-                applications: {
-                    users: { page: 1, perPage: 20 },
-                    accessTypes: { page: 1, perPage: 20 }
                 }
             },
 
@@ -865,6 +873,7 @@ const vueAppConfig = {
 
         // Site drill-down
         showSiteDetail(index) {
+            this.pushNavigationHistory();
             this.siteDetailIndex = index;
         },
 
@@ -874,6 +883,7 @@ const vueAppConfig = {
 
         // User drill-down
         showUserDetail(index) {
+            this.pushNavigationHistory();
             this.userDetailIndex = index;
         },
 
@@ -883,6 +893,7 @@ const vueAppConfig = {
 
         // Application drill-down
         showApplicationDetail(index) {
+            this.pushNavigationHistory();
             this.applicationDetailIndex = index;
         },
 
@@ -892,11 +903,96 @@ const vueAppConfig = {
 
         // Access Type drill-down
         showAccessTypeDetail(index) {
+            this.pushNavigationHistory();
             this.accessTypeDetailIndex = index;
         },
 
         closeAccessTypeDetail() {
             this.accessTypeDetailIndex = null;
+        },
+
+        // Navigation History Management
+        pushNavigationHistory() {
+            this.navigationHistory.push({
+                tab: this.currentTab,
+                siteDetailIndex: this.siteDetailIndex,
+                userDetailIndex: this.userDetailIndex,
+                applicationDetailIndex: this.applicationDetailIndex,
+                accessTypeDetailIndex: this.accessTypeDetailIndex
+            });
+        },
+
+        goBack() {
+            if (this.navigationHistory.length > 0) {
+                const previous = this.navigationHistory.pop();
+                this.currentTab = previous.tab;
+                this.siteDetailIndex = previous.siteDetailIndex;
+                this.userDetailIndex = previous.userDetailIndex;
+                this.applicationDetailIndex = previous.applicationDetailIndex;
+                this.accessTypeDetailIndex = previous.accessTypeDetailIndex;
+            } else {
+                // No history, just close current detail
+                this.closeAllDetails();
+            }
+        },
+
+        closeAllDetails() {
+            this.siteDetailIndex = null;
+            this.userDetailIndex = null;
+            this.applicationDetailIndex = null;
+            this.accessTypeDetailIndex = null;
+        },
+
+        // Cross-tab navigation methods
+        navigateToSite(siteUrl) {
+            this.pushNavigationHistory();
+            this.closeAllDetails();
+            this.currentTab = 'sites';
+
+            // Find the site index by URL
+            const index = this.reportData.site_activity.findIndex(s => s.site_url === siteUrl);
+            if (index !== -1) {
+                this.siteDetailIndex = index;
+            }
+        },
+
+        navigateToUser(userId) {
+            this.pushNavigationHistory();
+            this.closeAllDetails();
+            this.currentTab = 'users';
+
+            // Find the user index by ID
+            const index = this.reportData.user_activity.findIndex(u => u.user_id === userId);
+            if (index !== -1) {
+                this.userDetailIndex = index;
+            }
+        },
+
+        navigateToAccessType(accessType) {
+            this.pushNavigationHistory();
+            this.closeAllDetails();
+            this.currentTab = 'access-types';
+
+            // Find the access type index
+            const data = this.showHumanReadableAccessTypes.accessTypes
+                ? this.aggregatedAccessTypesData
+                : this.reportData.access_types;
+            const index = data.findIndex(t => t.type === accessType);
+            if (index !== -1) {
+                this.accessTypeDetailIndex = index;
+            }
+        },
+
+        navigateToApplication(application) {
+            this.pushNavigationHistory();
+            this.closeAllDetails();
+            this.currentTab = 'applications';
+
+            // Find the application index
+            const index = this.reportData.applications.findIndex(a => a.application === application);
+            if (index !== -1) {
+                this.applicationDetailIndex = index;
+            }
         },
 
         // Modal handling
@@ -1561,8 +1657,138 @@ const vueAppConfig = {
             this.modalOpen = true;
         },
 
+        // Render main overview tables with search and pagination
+        renderSitesOverviewTable() {
+            const sites = this.reportData?.site_activity || [];
+            if (sites.length === 0) {
+                return '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">No sites found</p>';
+            }
+
+            const searchQuery = this.searchQueries.sites.main;
+            const filteredSites = searchQuery
+                ? sites.filter(s => this.extractSiteName(s.site_url).toLowerCase().includes(searchQuery.toLowerCase()))
+                : sites;
+
+            const paginationState = this.pagination.sites.main;
+            const paginated = this.paginateData(filteredSites, paginationState.page, paginationState.perPage);
+
+            return `
+                ${this.renderSearchBox('sites', 'main')}
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Site</th>
+                            <th>Operations</th>
+                            <th>Users</th>
+                            <th>Files</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${paginated.items.map((site, index) => {
+                            const originalIndex = sites.findIndex(s => s.site_url === site.site_url);
+                            return `
+                                <tr class="clickable" onclick="window.vueApp.showSiteDetail(${originalIndex})">
+                                    <td>${this.extractSiteName(site.site_url)}</td>
+                                    <td>${this.formatNumber(site.total_operations)}</td>
+                                    <td>${this.formatNumber(site.unique_users)}</td>
+                                    <td>${this.formatNumber(site.unique_files)}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+                ${this.renderPaginationControls('sites', 'main', paginated.currentPage, paginated.totalPages, paginated.totalItems)}
+            `;
+        },
+
+        renderUsersOverviewTable() {
+            const users = this.reportData?.user_activity || [];
+            if (users.length === 0) {
+                return '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">No users found</p>';
+            }
+
+            const searchQuery = this.searchQueries.users.main;
+            const filteredUsers = searchQuery
+                ? users.filter(u => u.user_id.toLowerCase().includes(searchQuery.toLowerCase()))
+                : users;
+
+            const paginationState = this.pagination.users.main;
+            const paginated = this.paginateData(filteredUsers, paginationState.page, paginationState.perPage);
+
+            return `
+                ${this.renderSearchBox('users', 'main')}
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Operations</th>
+                            <th>Sites</th>
+                            <th>Files</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${paginated.items.map((user, index) => {
+                            const originalIndex = users.findIndex(u => u.user_id === user.user_id);
+                            return `
+                                <tr class="clickable" onclick="window.vueApp.showUserDetail(${originalIndex})">
+                                    <td>${user.user_id}</td>
+                                    <td>${this.formatNumber(user.total_operations)}</td>
+                                    <td>${this.formatNumber(user.unique_sites)}</td>
+                                    <td>${this.formatNumber(user.unique_files)}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+                ${this.renderPaginationControls('users', 'main', paginated.currentPage, paginated.totalPages, paginated.totalItems)}
+            `;
+        },
+
+        renderApplicationsOverviewTable() {
+            const applications = this.reportData?.applications || [];
+            if (applications.length === 0) {
+                return '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">No applications found</p>';
+            }
+
+            const searchQuery = this.searchQueries.applications.main;
+            const filteredApps = searchQuery
+                ? applications.filter(a => a.application.toLowerCase().includes(searchQuery.toLowerCase()))
+                : applications;
+
+            const paginationState = this.pagination.applications.main;
+            const paginated = this.paginateData(filteredApps, paginationState.page, paginationState.perPage);
+
+            return `
+                ${this.renderSearchBox('applications', 'main')}
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Application</th>
+                            <th>Count</th>
+                            <th>Users</th>
+                            <th>Sites</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${paginated.items.map((app, index) => {
+                            const originalIndex = applications.findIndex(a => a.application === app.application);
+                            return `
+                                <tr class="clickable" onclick="window.vueApp.showApplicationDetail(${originalIndex})">
+                                    <td><strong>${app.application}</strong></td>
+                                    <td>${this.formatNumber(app.count)}</td>
+                                    <td>${this.formatNumber(app.unique_users)}</td>
+                                    <td>${this.formatNumber(app.unique_sites)}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+                ${this.renderPaginationControls('applications', 'main', paginated.currentPage, paginated.totalPages, paginated.totalItems)}
+            `;
+        },
+
         // Reusable table rendering functions
-        renderUsersTable(users, context, listType = 'users') {
+        renderUsersTable(users, context, listType = 'users', clickable = false) {
             if (!users || users.length === 0) {
                 return '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">No users found</p>';
             }
@@ -1575,6 +1801,9 @@ const vueAppConfig = {
             const paginationState = this.pagination[context][listType];
             const paginated = this.paginateData(filteredUsers, paginationState.page, paginationState.perPage);
 
+            const clickableClass = clickable ? 'clickable' : '';
+            const clickHandler = clickable ? `onclick="window.vueApp.navigateToUser('USERID')"` : '';
+
             return `
                 ${this.renderSearchBox(context, listType)}
                 <table class="data-table">
@@ -1586,7 +1815,7 @@ const vueAppConfig = {
                     </thead>
                     <tbody>
                         ${paginated.items.map(user => `
-                            <tr>
+                            <tr class="${clickableClass}" ${clickHandler.replace('USERID', user.user.replace(/'/g, "\\'"))}>
                                 <td>${user.user}</td>
                                 <td>${this.formatNumber(user.operations)}</td>
                             </tr>
@@ -1597,7 +1826,7 @@ const vueAppConfig = {
             `;
         },
 
-        renderAccessTypesTable(accessTypes, context, listType = 'accessTypes', showHumanReadable = false) {
+        renderAccessTypesTable(accessTypes, context, listType = 'accessTypes', showHumanReadable = false, clickable = false) {
             if (!accessTypes || accessTypes.length === 0) {
                 return '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">No access types found</p>';
             }
@@ -1613,6 +1842,9 @@ const vueAppConfig = {
             const paginationState = this.pagination[context][listType];
             const paginated = this.paginateData(filteredTypes, paginationState.page, paginationState.perPage);
 
+            const clickableClass = clickable ? 'clickable' : '';
+            const clickHandler = clickable ? `onclick="window.vueApp.navigateToAccessType('TYPENAME')"` : '';
+
             return `
                 ${this.renderSearchBox(context, listType)}
                 <table class="data-table">
@@ -1624,7 +1856,7 @@ const vueAppConfig = {
                     </thead>
                     <tbody>
                         ${paginated.items.map(type => `
-                            <tr>
+                            <tr class="${clickableClass}" ${clickHandler.replace('TYPENAME', type.type.replace(/'/g, "\\'"))}>
                                 <td><strong>${type.type}</strong></td>
                                 <td>${this.formatNumber(type.count)}</td>
                             </tr>
@@ -1635,7 +1867,7 @@ const vueAppConfig = {
             `;
         },
 
-        renderApplicationsTable(applications, context, listType = 'applications') {
+        renderApplicationsTable(applications, context, listType = 'applications', clickable = false) {
             if (!applications || applications.length === 0) {
                 return '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">No applications found</p>';
             }
@@ -1648,6 +1880,9 @@ const vueAppConfig = {
             const paginationState = this.pagination[context][listType];
             const paginated = this.paginateData(filteredApps, paginationState.page, paginationState.perPage);
 
+            const clickableClass = clickable ? 'clickable' : '';
+            const clickHandler = clickable ? `onclick="window.vueApp.navigateToApplication('APPNAME')"` : '';
+
             return `
                 ${this.renderSearchBox(context, listType)}
                 <table class="data-table">
@@ -1659,7 +1894,7 @@ const vueAppConfig = {
                     </thead>
                     <tbody>
                         ${paginated.items.map(app => `
-                            <tr>
+                            <tr class="${clickableClass}" ${clickHandler.replace('APPNAME', app.app.replace(/'/g, "\\'"))}>
                                 <td><strong>${app.app}</strong></td>
                                 <td>${this.formatNumber(app.count)}</td>
                             </tr>

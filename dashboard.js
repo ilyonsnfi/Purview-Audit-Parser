@@ -62,7 +62,44 @@ const vueAppConfig = {
             modalUsers: [],
 
             // Aggregated Access Types (for human-readable view)
-            aggregatedAccessTypesData: []
+            aggregatedAccessTypesData: [],
+
+            // Operations we track (file operations + sharing operations)
+            FILE_OPERATIONS: new Set([
+                // File operations
+                'FileAccessed',
+                'FileAccessedExtended',
+                'FileDeleted',
+                'FileDownloaded',
+                'FileModified',
+                'FileModifiedExtended',
+                'FileMoved',
+                'FilePreviewed',
+                'FileRecycled',
+                'FileRenamed',
+                'FileSyncDownloadedFull',
+                'FileSyncUploadedFull',
+                'FileUploaded',
+                'FileUploadedPartial',
+                'FileVersionsAllDeleted',
+                // Sharing operations
+                'SharingInvitationCreated',
+                'SharingInvitationAccepted',
+                'AnonymousLinkCreated',
+                'AnonymousLinkUsed',
+                'SecureLinkCreated',
+                'AddedToSecureLink'
+            ]),
+
+            // Sharing operation types (subset of FILE_OPERATIONS)
+            SHARING_OPERATIONS: new Set([
+                'SharingInvitationCreated',
+                'SharingInvitationAccepted',
+                'AnonymousLinkCreated',
+                'AnonymousLinkUsed',
+                'SecureLinkCreated',
+                'AddedToSecureLink'
+            ])
         };
     },
 
@@ -71,6 +108,127 @@ const vueAppConfig = {
     },
 
     methods: {
+        // Parse AuditData JSON string (equivalent to Python's parse_audit_data)
+        parseAuditData(auditDataStr) {
+            if (!auditDataStr) return null;
+
+            try {
+                return JSON.parse(auditDataStr);
+            } catch (error) {
+                console.warn('Failed to parse AuditData JSON:', error);
+                return null;
+            }
+        },
+
+        // Extract file info from raw Purview log row (equivalent to Python's extract_file_info)
+        extractFileInfo(row) {
+            const operation = row.Operation;
+
+            // Filter for tracked operations only (file + sharing)
+            if (!operation || !this.FILE_OPERATIONS.has(operation)) {
+                return null;
+            }
+
+            // Parse AuditData JSON
+            const auditData = this.parseAuditData(row.AuditData);
+            if (!auditData) return null;
+
+            // Extract common fields
+            const fileName = auditData.SourceFileName || '';
+            const fileExtension = auditData.SourceFileExtension || '';
+            const filePath = auditData.SourceRelativeUrl || '';
+            const fileUrl = auditData.ObjectId || row.ObjectId || '';
+            const userId = row.UserId || '';
+            const timestamp = row.CreationDate || '';
+            const siteUrl = auditData.SiteUrl || '';
+            const workload = auditData.Workload || '';
+
+            // Application fallback chain: ApplicationDisplayName -> ClientAppName -> UserAgent
+            const application = auditData.ApplicationDisplayName ||
+                              auditData.ClientAppName ||
+                              row.UserAgent ||
+                              'Unknown';
+
+            // Build access_type: operation + platform (if not 'NotSpecified')
+            const platform = auditData.Platform || '';
+            let accessType = operation;
+            if (platform && platform !== 'NotSpecified') {
+                accessType = `${operation} (${platform})`;
+            }
+
+            // Extract sharing-specific fields
+            const isSharing = this.SHARING_OPERATIONS.has(operation);
+            const targetUser = isSharing ? (auditData.TargetUserOrGroupName || '') : '';
+            const targetType = isSharing ? (auditData.TargetUserOrGroupType || '') : '';
+            const sharingId = isSharing ? (auditData.UniqueSharingId || '') : '';
+            const sharingScope = isSharing ? (auditData.SharingLinkScope || '') : '';
+
+            // Return normalized row with sharing fields
+            return {
+                file_name: fileName,
+                file_extension: fileExtension,
+                file_path: filePath,
+                user_id: userId,
+                access_type: accessType,
+                operation: operation,
+                timestamp: timestamp,
+                application: application,
+                workload: workload,
+                site_url: siteUrl,
+                file_url: fileUrl,
+                // Sharing-specific fields
+                is_sharing: isSharing,
+                target_user: targetUser,
+                target_type: targetType,
+                sharing_id: sharingId,
+                sharing_scope: sharingScope
+            };
+        },
+
+        // Parse raw Purview log data (equivalent to Python's process_audit_log)
+        parseRawPurviewLog(rawData) {
+            console.log('Parsing raw Purview audit log...');
+            const normalizedData = [];
+
+            rawData.forEach(row => {
+                const fileInfo = this.extractFileInfo(row);
+                if (fileInfo) {
+                    normalizedData.push(fileInfo);
+                }
+            });
+
+            // Sort by file_path -> file_name -> timestamp (same as Python)
+            normalizedData.sort((a, b) => {
+                if (a.file_path !== b.file_path) {
+                    return a.file_path.localeCompare(b.file_path);
+                }
+                if (a.file_name !== b.file_name) {
+                    return a.file_name.localeCompare(b.file_name);
+                }
+                return a.timestamp.localeCompare(b.timestamp);
+            });
+
+            console.log(`Parsed ${normalizedData.length} file operations from ${rawData.length} raw records`);
+            return normalizedData;
+        },
+
+        // Detect if CSV is raw Purview log or already-parsed format
+        detectCSVFormat(data) {
+            if (data.length === 0) return 'unknown';
+
+            const firstRow = data[0];
+
+            // Raw Purview log has: CreationDate, UserId, Operation, AuditData
+            const hasRawFields = 'AuditData' in firstRow && 'CreationDate' in firstRow;
+
+            // Parsed format has: file_name, file_path, operation
+            const hasParsedFields = 'file_name' in firstRow && 'file_path' in firstRow;
+
+            if (hasRawFields) return 'raw';
+            if (hasParsedFields) return 'parsed';
+            return 'unknown';
+        },
+
         // Handle file selection
         handleFileSelect(event) {
             const file = event.target.files[0];
@@ -84,26 +242,29 @@ const vueAppConfig = {
                 skipEmptyLines: true,
                 complete: (results) => {
                     try {
-                        this.rawData = results.data;
-                        this.showLoadingMessage(`Analyzing ${this.rawData.length.toLocaleString()} operations...`, '');
+                        const csvData = results.data;
 
-                        setTimeout(() => {
-                            try {
-                                this.reportData = this.analyzeData(this.rawData);
+                        // Detect CSV format
+                        const format = this.detectCSVFormat(csvData);
+                        console.log(`Detected CSV format: ${format}`);
 
-                                // Build aggregated access types for human-readable view
-                                this.aggregatedAccessTypesData = this.buildAggregatedAccessTypesData(this.reportData.access_types);
+                        let normalizedData;
 
-                                this.loading = false;
+                        if (format === 'raw') {
+                            // Parse raw Purview log
+                            this.showLoadingMessage('Converting raw Purview log...', `Processing ${csvData.length.toLocaleString()} records`);
 
-                                // Use Vue's nextTick to ensure DOM is updated before creating charts
-                                this.$nextTick(() => {
-                                    this.initializeCharts();
-                                });
-                            } catch (error) {
-                                this.showError('Analysis Error', error.message);
-                            }
-                        }, 100);
+                            setTimeout(() => {
+                                normalizedData = this.parseRawPurviewLog(csvData);
+                                this.processNormalizedData(normalizedData);
+                            }, 100);
+                        } else if (format === 'parsed') {
+                            // Already normalized, use directly
+                            normalizedData = csvData;
+                            this.processNormalizedData(normalizedData);
+                        } else {
+                            throw new Error('Unknown CSV format. Expected either raw Purview log or pre-parsed format.');
+                        }
                     } catch (error) {
                         this.showError('CSV Parsing Error', error.message);
                     }
@@ -112,6 +273,34 @@ const vueAppConfig = {
                     this.showError('File Read Error', error.message);
                 }
             });
+        },
+
+        // Process normalized data (extracted to avoid duplication)
+        processNormalizedData(normalizedData) {
+            try {
+                this.rawData = normalizedData;
+                this.showLoadingMessage(`Analyzing ${this.rawData.length.toLocaleString()} operations...`, '');
+
+                setTimeout(() => {
+                    try {
+                        this.reportData = this.analyzeData(this.rawData);
+
+                        // Build aggregated access types for human-readable view
+                        this.aggregatedAccessTypesData = this.buildAggregatedAccessTypesData(this.reportData.access_types);
+
+                        this.loading = false;
+
+                        // Use Vue's nextTick to ensure DOM is updated before creating charts
+                        this.$nextTick(() => {
+                            this.initializeCharts();
+                        });
+                    } catch (error) {
+                        this.showError('Analysis Error', error.message);
+                    }
+                }, 100);
+            } catch (error) {
+                this.showError('Processing Error', error.message);
+            }
         },
 
         // Show loading message
@@ -132,7 +321,7 @@ const vueAppConfig = {
                     <h2>${title}</h2>
                     <p>${message}</p>
                     <p style="margin-top: 20px; color: var(--text-secondary);">
-                        Make sure you selected the correct CSV file from parse_purview_audit_log.py
+                        Upload either a raw Purview audit log CSV or a pre-parsed CSV from parse_purview_audit_log.py
                     </p>
                     <button class="btn btn-primary" onclick="location.reload()" style="margin-top: 20px;">
                         Try Again
@@ -149,6 +338,14 @@ const vueAppConfig = {
             const applicationData = {};
             const dailyOps = {};
             const fileTypes = {};
+
+            // Sharing-specific metrics
+            let totalFileOps = 0;
+            let totalSharingOps = 0;
+            const sharingPartners = new Set();  // Unique people shared with
+            const externalShares = new Set();    // External sharing events
+            const internalShares = new Set();    // Internal sharing events
+            const sharingByType = {};            // Count by sharing operation type
 
             let totalOps = 0;
             const allFiles = new Set();
@@ -167,11 +364,37 @@ const vueAppConfig = {
                 const timestamp = row.timestamp || '';
                 const application = row.application || 'Unknown';
                 const siteUrl = row.site_url || 'Unknown';
+                const isSharing = row.is_sharing || false;
+                const targetUser = row.target_user || '';
+                const targetType = row.target_type || '';
 
                 const fileKey = `${filePath}/${fileName}`;
                 allFiles.add(fileKey);
 
                 if (fileExt) fileTypes[fileExt] = (fileTypes[fileExt] || 0) + 1;
+
+                // Track sharing-specific metrics
+                if (isSharing) {
+                    totalSharingOps++;
+
+                    // Track sharing by type
+                    sharingByType[operation] = (sharingByType[operation] || 0) + 1;
+
+                    // Track sharing partners
+                    if (targetUser) {
+                        sharingPartners.add(targetUser);
+
+                        // Track external vs internal
+                        const shareKey = `${operation}:${targetUser}:${fileKey}:${timestamp}`;
+                        if (targetType === 'Guest') {
+                            externalShares.add(shareKey);
+                        } else if (targetType) {
+                            internalShares.add(shareKey);
+                        }
+                    }
+                } else {
+                    totalFileOps++;
+                }
 
                 if (timestamp) {
                     const cleanTimestamp = timestamp.trim();
@@ -425,10 +648,25 @@ const vueAppConfig = {
                     generated_at: new Date().toISOString(),
                     source_file: 'CSV',
                     total_operations: totalOps,
+                    total_file_operations: totalFileOps,
+                    total_sharing_operations: totalSharingOps,
                     unique_users: Object.keys(userData).length,
                     unique_sites: Object.keys(siteData).length,
                     unique_files: allFiles.size,
+                    unique_sharing_partners: sharingPartners.size,
+                    external_shares: externalShares.size,
+                    internal_shares: internalShares.size,
                     date_range: dateRange
+                },
+                sharing_metrics: {
+                    total_sharing_operations: totalSharingOps,
+                    sharing_by_type: Object.entries(sharingByType)
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([type, count]) => ({ type, count })),
+                    unique_sharing_partners: sharingPartners.size,
+                    external_shares: externalShares.size,
+                    internal_shares: internalShares.size,
+                    sharing_partners: Array.from(sharingPartners)
                 },
                 executive_summary: {
                     top_sites: siteActivity.slice(0, 10).map(s => ({
@@ -439,7 +677,7 @@ const vueAppConfig = {
                         user: u.user_id,
                         operations: u.total_operations
                     })),
-                    access_type_distribution: accessTypes,
+                    access_type_distribution: this.aggregateAccessTypes(accessTypes),
                     file_type_distribution: Object.entries(fileTypes)
                         .sort((a, b) => b[1] - a[1])
                         .slice(0, 15)
@@ -531,11 +769,13 @@ const vueAppConfig = {
             const ctx = document.getElementById('accessTypeChart')?.getContext('2d');
             if (!ctx || !this.reportData) return;
 
-            // Use human-readable aggregated access types for Executive Summary
-            const aggregated = this.aggregateAccessTypes(this.reportData.executive_summary.access_type_distribution);
-            const data = aggregated.slice(0, 8);
+            // Access type distribution is already aggregated to human-readable format
+            const data = this.reportData.executive_summary.access_type_distribution;
 
             if (this.charts.accessType) this.charts.accessType.destroy();
+
+            // Generate colors dynamically based on number of items
+            const colors = this.generateChartColors(data.length);
 
             this.charts.accessType = new Chart(ctx, {
                 type: 'doughnut',
@@ -543,16 +783,7 @@ const vueAppConfig = {
                     labels: data.map(d => d.type),
                     datasets: [{
                         data: data.map(d => d.count),
-                        backgroundColor: [
-                            'rgba(0, 120, 212, 0.8)',
-                            'rgba(16, 124, 16, 0.8)',
-                            'rgba(255, 140, 0, 0.8)',
-                            'rgba(216, 59, 1, 0.8)',
-                            'rgba(80, 230, 255, 0.8)',
-                            'rgba(185, 0, 185, 0.8)',
-                            'rgba(255, 185, 0, 0.8)',
-                            'rgba(0, 178, 148, 0.8)'
-                        ]
+                        backgroundColor: colors
                     }]
                 },
                 options: {
@@ -754,6 +985,39 @@ const vueAppConfig = {
             }, 100);
         },
 
+        // Generate chart colors dynamically
+        generateChartColors(count) {
+            const baseColors = [
+                'rgba(0, 120, 212, 0.8)',      // Blue
+                'rgba(16, 124, 16, 0.8)',      // Green
+                'rgba(255, 140, 0, 0.8)',      // Orange
+                'rgba(216, 59, 1, 0.8)',       // Red
+                'rgba(80, 230, 255, 0.8)',     // Cyan
+                'rgba(185, 0, 185, 0.8)',      // Magenta
+                'rgba(255, 185, 0, 0.8)',      // Yellow
+                'rgba(0, 178, 148, 0.8)',      // Teal
+                'rgba(164, 38, 44, 0.8)',      // Dark Red
+                'rgba(76, 209, 55, 0.8)',      // Light Green
+                'rgba(149, 117, 205, 0.8)',    // Purple
+                'rgba(255, 99, 71, 0.8)',      // Tomato
+                'rgba(72, 201, 176, 0.8)',     // Turquoise
+                'rgba(255, 215, 0, 0.8)',      // Gold
+                'rgba(106, 90, 205, 0.8)'      // Slate Blue
+            ];
+
+            // If we need more colors than we have, generate them dynamically
+            if (count <= baseColors.length) {
+                return baseColors.slice(0, count);
+            }
+
+            const colors = [...baseColors];
+            for (let i = baseColors.length; i < count; i++) {
+                const hue = (i * 137.5) % 360; // Golden angle for color distribution
+                colors.push(`hsla(${hue}, 70%, 60%, 0.8)`);
+            }
+            return colors;
+        },
+
         // Utility functions
         formatNumber(num) {
             return num ? num.toLocaleString() : '0';
@@ -865,6 +1129,11 @@ const vueAppConfig = {
 
         // Map raw access types to human-readable versions
         getHumanReadableAccessType(rawType) {
+            // Check if this is a sharing operation first
+            if (this.SHARING_OPERATIONS.has(rawType)) {
+                return 'Shared';
+            }
+
             // Remove "File" prefix and handle Extended versions
             let type = rawType;
 

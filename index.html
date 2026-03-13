@@ -35,18 +35,19 @@
             <!-- Loading State -->
             <div id="loading" class="loading" v-show="loading">
                 <div class="loading-content">
-                    <h2 class="loading-title">Load File Access Data</h2>
+                    <h2 class="loading-title">Load Purview Audit Data</h2>
                     <p class="loading-description">
-                        Select the CSV file from <strong>parse_purview_audit_log.py</strong><br>
-                        (e.g., audit_file_access_report.csv)
+                        Select a CSV file:<br>
+                        <strong>• Raw Purview audit log export</strong> (will be parsed in browser)<br>
+                        <strong>• Pre-parsed CSV</strong> from parse_purview_audit_log.py
                     </p>
                     <input type="file" ref="fileInput" accept=".csv" class="hidden" @change="handleFileSelect($event)">
                     <button class="btn btn-primary file-input-btn" @click="$refs.fileInput.click()">
                         📂 Select CSV File
                     </button>
                     <p class="loading-note">
-                        <strong>Note:</strong> You no longer need to run generate_report_data.py!<br>
-                        The dashboard will analyze the CSV directly in your browser.
+                        <strong>Note:</strong> Everything runs in your browser!<br>
+                        No Python scripts required - just upload your raw Purview log.
                     </p>
                 </div>
             </div>
@@ -154,10 +155,6 @@
                                 <div class="stat-label">Top File Type</div>
                             </div>
                         </div>
-                        <div class="card mb-30">
-                            <div class="card-header">All Users ({{ reportData.site_activity[siteDetailIndex].top_users.length }} Total)</div>
-                            <div v-html="renderUsersTable(reportData.site_activity[siteDetailIndex].top_users, 'siteActivity', 'users')"></div>
-                        </div>
 
                         <div class="card mb-30">
                             <div class="card-header">
@@ -169,6 +166,11 @@
                                 'site',
                                 reportData.site_activity[siteDetailIndex].file_details
                             )"></div>
+                        </div>
+
+                        <div class="card mb-30">
+                            <div class="card-header">All Users ({{ reportData.site_activity[siteDetailIndex].top_users.length }} Total)</div>
+                            <div v-html="renderUsersTable(reportData.site_activity[siteDetailIndex].top_users, 'siteActivity', 'users')"></div>
                         </div>
 
                         <div class="card mb-30">
@@ -320,10 +322,6 @@
                                 <div class="stat-label">Top Application</div>
                             </div>
                         </div>
-                        <div class="card mb-30">
-                            <div class="card-header">All Users ({{ getAccessTypesData()[accessTypeDetailIndex].top_users.length }} Total)</div>
-                            <div v-html="renderUsersTable(getAccessTypesData()[accessTypeDetailIndex].top_users, 'accessTypes', 'users')"></div>
-                        </div>
 
                         <div class="card mb-30">
                             <div class="card-header">
@@ -335,6 +333,11 @@
                                 'access-type',
                                 getAccessTypesData()[accessTypeDetailIndex].file_details
                             )"></div>
+                        </div>
+
+                        <div class="card mb-30">
+                            <div class="card-header">All Users ({{ getAccessTypesData()[accessTypeDetailIndex].top_users.length }} Total)</div>
+                            <div v-html="renderUsersTable(getAccessTypesData()[accessTypeDetailIndex].top_users, 'accessTypes', 'users')"></div>
                         </div>
 
                         <div class="card mb-30">
@@ -392,10 +395,6 @@
                                 <div class="stat-label">Top Access Type</div>
                             </div>
                         </div>
-                        <div class="card mb-30">
-                            <div class="card-header">All Users ({{ reportData.applications[applicationDetailIndex].top_users.length }} Total)</div>
-                            <div v-html="renderUsersTable(reportData.applications[applicationDetailIndex].top_users, 'applications', 'users')"></div>
-                        </div>
 
                         <div class="card mb-30">
                             <div class="card-header">
@@ -407,6 +406,11 @@
                                 'application',
                                 reportData.applications[applicationDetailIndex].file_details
                             )"></div>
+                        </div>
+
+                        <div class="card mb-30">
+                            <div class="card-header">All Users ({{ reportData.applications[applicationDetailIndex].top_users.length }} Total)</div>
+                            <div v-html="renderUsersTable(reportData.applications[applicationDetailIndex].top_users, 'applications', 'users')"></div>
                         </div>
 
                         <div class="card mb-30">

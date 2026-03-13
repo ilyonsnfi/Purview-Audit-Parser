@@ -162,6 +162,14 @@ header .subtitle {
     background: linear-gradient(135deg, var(--danger-color), #ff5050);
 }
 
+.stat-card.blue {
+    background: linear-gradient(135deg, #0078d4, #50e6ff);
+}
+
+.stat-card.purple {
+    background: linear-gradient(135deg, #b900b9, #e266e2);
+}
+
 .stat-value {
     font-size: 2.5em;
     font-weight: 700;
@@ -653,6 +661,10 @@ header .subtitle {
 
 .mb-30 {
     margin-bottom: var(--spacing-xl);
+}
+
+.mt-20 {
+    margin-top: 20px;
 }
 
 /* ===== RESPONSIVE DESIGN ===== */

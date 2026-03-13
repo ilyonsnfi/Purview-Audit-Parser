@@ -18,6 +18,7 @@ Analyze Microsoft Purview audit logs and visualize SharePoint file activity.
 5. **Click "Workload"** dropdown → Search for and select "SharePoint"
 6. Click **Search**, wait for results
 7. Click **Export** → Download the CSV
+* Note: Purview limits exports to 50k rows of data with a Standard plan, and 100k rows of data with a Premium plan. Consider small batches to capture all the data.
 
 Note: this process can take hours, depending on the size of your search.
 
@@ -80,7 +81,7 @@ open index.html
 
 ## Tracked Operations
 
-FileAccessed, FileDownloaded, FileModified, FileUploaded, FileDeleted, FileMoved, FileRenamed, FilePreviewed, FileRecycled, FileSyncDownloadedFull, FileSyncUploadedFull, FileAccessedExtended, FileModifiedExtended, FileUploadedPartial, FileVersionsAllDeleted
+FileAccessed, FileDownloaded, FileModified, FileUploaded, FileDeleted, FileMoved, FileRenamed, FilePreviewed, FileRecycled, FileSyncDownloadedFull, FileSyncUploadedFull, FileAccessedExtended, FileModifiedExtended, FileUploadedPartial, FileVersionsAllDeleted, SharingInvitationCreated, SharingInvitationAccepted, AnonymousLinkCreated, AnonymousLinkUsed, SecureLinkCreated, AddedToSecureLink
 
 ### What are these File Operations?
 See Microsoft's documentation [here](https://learn.microsoft.com/en-us/purview/audit-log-activities#file-and-page-activities)

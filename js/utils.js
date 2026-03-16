@@ -117,6 +117,44 @@ function getHumanReadableAccessType(rawType) {
     return type;
 }
 
+// Map raw application names to human-readable versions
+function getHumanReadableApplication(rawApp) {
+    if (!rawApp) return 'Unknown';
+
+    const app = rawApp.trim();
+
+    // Combine Web Office applications
+    if (app.startsWith('Web') && (app.includes('Excel') || app.includes('Word') || app.includes('PowerPoint'))) {
+        return 'Web Office';
+    }
+    if (app.startsWith('MSOCS') && (app.includes('Excel') || app.includes('Word') || app.includes('PowerPoint'))) {
+        return 'Web Office';
+    }
+    // Combine Office apps ending with "Online"
+    if (app.endsWith('Online') && (app.includes('Excel') || app.includes('Word') || app.includes('PowerPoint'))) {
+        return 'Web Office';
+    }
+
+    // Combine OneDrive sync applications
+    if (app === 'OneDrive SyncEngine' || app === 'OneDriveSync') {
+        return 'OneDrive Sync';
+    }
+
+    // Combine all backup applications
+    if (app.startsWith('Backup Application')) {
+        return 'Backup Application';
+    }
+
+    // Combine Microsoft Office desktop apps (lowercase variants)
+    const lowerApp = app.toLowerCase();
+    if (lowerApp === 'excel' || lowerApp === 'word' || lowerApp === 'powerpoint' ||
+        lowerApp === 'outlook' || lowerApp === 'onenote' || lowerApp === 'access') {
+        return 'Microsoft Office';
+    }
+
+    return app;
+}
+
 // Aggregate access types into human-readable format
 function aggregateAccessTypes(accessTypesArray) {
     const aggregated = {};
@@ -131,6 +169,23 @@ function aggregateAccessTypes(accessTypesArray) {
 
     return Object.entries(aggregated)
         .map(([type, count]) => ({ type, count }))
+        .sort((a, b) => b.count - a.count);
+}
+
+// Aggregate applications into human-readable format
+function aggregateApplications(applicationsArray) {
+    const aggregated = {};
+
+    applicationsArray.forEach(item => {
+        const humanReadable = getHumanReadableApplication(item.app);
+        if (!aggregated[humanReadable]) {
+            aggregated[humanReadable] = 0;
+        }
+        aggregated[humanReadable] += item.count;
+    });
+
+    return Object.entries(aggregated)
+        .map(([app, count]) => ({ app, count }))
         .sort((a, b) => b.count - a.count);
 }
 

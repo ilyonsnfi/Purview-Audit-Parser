@@ -32,6 +32,14 @@ const vueAppConfig = {
                 applications: true
             },
 
+            // Application View Toggles (true = human-readable, false = raw)
+            showHumanReadableApplications: {
+                siteActivity: true,
+                userActivity: true,
+                accessTypes: true,
+                applications: true
+            },
+
             // Search and Pagination State
             searchQueries: {
                 sites: { main: '' },
@@ -283,7 +291,9 @@ const vueAppConfig = {
         extractSiteName,
         generateChartColors,
         getHumanReadableAccessType,
+        getHumanReadableApplication,
         aggregateAccessTypes,
+        aggregateApplications,
         filterBySearch,
         paginateData,
 

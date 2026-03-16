@@ -110,14 +110,15 @@ function createTopApplicationsChart() {
     const ctx = document.getElementById('topApplicationsChart')?.getContext('2d');
     if (!ctx || !this.reportData) return;
 
-    const data = this.reportData.applications.slice(0, 10);
+    // Application distribution is already aggregated to human-readable format
+    const data = this.reportData.executive_summary.application_distribution.slice(0, 10);
 
     if (this.charts.topApplications) this.charts.topApplications.destroy();
 
     this.charts.topApplications = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: data.map(d => d.application),
+            labels: data.map(d => d.app),
             datasets: [{
                 label: 'Operations',
                 data: data.map(d => d.count),

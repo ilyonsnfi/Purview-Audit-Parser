@@ -441,21 +441,26 @@ function renderAccessTypesTable(accessTypes, context, listType = 'accessTypes', 
     `;
 }
 
-function renderApplicationsTable(applications, context, listType = 'applications', clickable = false) {
+function renderApplicationsTable(applications, context, listType = 'applications', showHumanReadable = false, clickable = false) {
     if (!applications || applications.length === 0) {
         return '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">No applications found</p>';
     }
 
+    // Aggregate to human-readable if requested
+    const displayApps = showHumanReadable ? aggregateApplications(applications) : applications;
+
     // Apply search filter
     const searchQuery = this.searchQueries[context][listType];
-    const filteredApps = filterBySearch(applications, searchQuery, 'app');
+    const filteredApps = filterBySearch(displayApps, searchQuery, 'app');
 
     // Apply pagination
     const paginationState = this.pagination[context][listType];
     const paginated = paginateData(filteredApps, paginationState.page, paginationState.perPage);
 
-    const clickableClass = clickable ? 'clickable' : '';
-    const clickHandler = clickable ? `onclick="window.vueApp.navigateToApplication('APPNAME')"` : '';
+    // Disable clicking when showing aggregated human-readable names (can't navigate to aggregated apps)
+    const isClickable = clickable && !showHumanReadable;
+    const clickableClass = isClickable ? 'clickable' : '';
+    const clickHandler = isClickable ? `onclick="window.vueApp.navigateToApplication('APPNAME')"` : '';
 
     return `
         ${this.renderSearchBox(context, listType)}

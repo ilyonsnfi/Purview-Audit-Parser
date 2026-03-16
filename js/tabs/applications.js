@@ -20,10 +20,44 @@ function renderApplicationsOverviewTable() {
         return '<p style="text-align: center; color: var(--text-secondary); padding: 20px;">No applications found</p>';
     }
 
+    // Aggregate to human-readable if requested
+    let displayApps;
+    if (this.showHumanReadableApplications.applications) {
+        // Aggregate applications by human-readable name
+        const aggregated = {};
+        applications.forEach(app => {
+            const humanReadable = getHumanReadableApplication(app.application);
+            if (!aggregated[humanReadable]) {
+                aggregated[humanReadable] = {
+                    application: humanReadable,
+                    count: 0,
+                    unique_users: 0,
+                    unique_sites: 0,
+                    users: new Set(),
+                    sites: new Set(),
+                    originalIndices: []
+                };
+            }
+            aggregated[humanReadable].count += app.count;
+            aggregated[humanReadable].originalIndices.push(applications.indexOf(app));
+            // Collect unique users and sites
+            app.top_users?.forEach(u => aggregated[humanReadable].users.add(u.user));
+            app.top_sites?.forEach(s => aggregated[humanReadable].sites.add(s.site));
+        });
+        displayApps = Object.values(aggregated).map(agg => ({
+            ...agg,
+            unique_users: agg.users.size,
+            unique_sites: agg.sites.size,
+            firstIndex: agg.originalIndices[0]
+        })).sort((a, b) => b.count - a.count);
+    } else {
+        displayApps = applications.map((app, idx) => ({ ...app, firstIndex: idx }));
+    }
+
     const searchQuery = this.searchQueries.applications.main;
     const filteredApps = searchQuery
-        ? applications.filter(a => a.application.toLowerCase().includes(searchQuery.toLowerCase()))
-        : applications;
+        ? displayApps.filter(a => a.application.toLowerCase().includes(searchQuery.toLowerCase()))
+        : displayApps;
 
     const paginationState = this.pagination.applications.main;
     const paginated = paginateData(filteredApps, paginationState.page, paginationState.perPage);
@@ -40,17 +74,14 @@ function renderApplicationsOverviewTable() {
                 </tr>
             </thead>
             <tbody>
-                ${paginated.items.map((app, index) => {
-                    const originalIndex = applications.findIndex(a => a.application === app.application);
-                    return `
-                        <tr class="clickable" onclick="window.vueApp.showApplicationDetail(${originalIndex})">
-                            <td><strong>${app.application}</strong></td>
-                            <td>${formatNumber(app.count)}</td>
-                            <td>${formatNumber(app.unique_users)}</td>
-                            <td>${formatNumber(app.unique_sites)}</td>
-                        </tr>
-                    `;
-                }).join('')}
+                ${paginated.items.map(app => `
+                    <tr class="clickable" onclick="window.vueApp.showApplicationDetail(${app.firstIndex})">
+                        <td><strong>${app.application}</strong></td>
+                        <td>${formatNumber(app.count)}</td>
+                        <td>${formatNumber(app.unique_users)}</td>
+                        <td>${formatNumber(app.unique_sites)}</td>
+                    </tr>
+                `).join('')}
             </tbody>
         </table>
         ${this.renderPaginationControls('applications', 'main', paginated.currentPage, paginated.totalPages, paginated.totalItems)}

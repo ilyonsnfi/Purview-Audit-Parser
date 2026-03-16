@@ -473,6 +473,20 @@ function analyzeData(data) {
                 operations: u.total_operations
             })),
             access_type_distribution: aggregateAccessTypes(accessTypes),
+            application_distribution: (() => {
+                // Aggregate applications to human-readable format for executive summary
+                const aggregated = {};
+                applications.forEach(app => {
+                    const humanReadable = getHumanReadableApplication(app.application);
+                    if (!aggregated[humanReadable]) {
+                        aggregated[humanReadable] = 0;
+                    }
+                    aggregated[humanReadable] += app.count;
+                });
+                return Object.entries(aggregated)
+                    .map(([app, count]) => ({ app, count }))
+                    .sort((a, b) => b.count - a.count);
+            })(),
             file_type_distribution: Object.entries(fileTypes)
                 .sort((a, b) => b[1] - a[1])
                 .slice(0, 15)

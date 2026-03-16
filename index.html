@@ -164,8 +164,13 @@
                         </div>
 
                         <div class="card mb-30">
-                            <div class="card-header">Applications ({{ reportData.site_activity[siteDetailIndex].applications.length }} Total)</div>
-                            <div v-html="renderApplicationsTable(reportData.site_activity[siteDetailIndex].applications, 'siteActivity', 'applications', true)"></div>
+                            <div class="card-header">
+                                <span>Applications ({{ reportData.site_activity[siteDetailIndex].applications.length }} Total)</span>
+                                <button class="btn btn-secondary" @click="showHumanReadableApplications.siteActivity = !showHumanReadableApplications.siteActivity" style="margin-left: auto;">
+                                    {{ showHumanReadableApplications.siteActivity ? 'Show Raw' : 'Show Readable' }}
+                                </button>
+                            </div>
+                            <div v-html="renderApplicationsTable(reportData.site_activity[siteDetailIndex].applications, 'siteActivity', 'applications', showHumanReadableApplications.siteActivity, true)"></div>
                         </div>
 
                     </div>
@@ -225,8 +230,13 @@
                         </div>
 
                         <div class="card mb-30">
-                            <div class="card-header">Applications ({{ reportData.user_activity[userDetailIndex].applications.length }} Total)</div>
-                            <div v-html="renderApplicationsTable(reportData.user_activity[userDetailIndex].applications, 'userActivity', 'applications', true)"></div>
+                            <div class="card-header">
+                                <span>Applications ({{ reportData.user_activity[userDetailIndex].applications.length }} Total)</span>
+                                <button class="btn btn-secondary" @click="showHumanReadableApplications.userActivity = !showHumanReadableApplications.userActivity" style="margin-left: auto;">
+                                    {{ showHumanReadableApplications.userActivity ? 'Show Raw' : 'Show Readable' }}
+                                </button>
+                            </div>
+                            <div v-html="renderApplicationsTable(reportData.user_activity[userDetailIndex].applications, 'userActivity', 'applications', showHumanReadableApplications.userActivity, true)"></div>
                         </div>
                     </div>
                 </div>
@@ -303,8 +313,13 @@
                         </div>
 
                         <div class="card mb-30">
-                            <div class="card-header">Applications ({{ getAccessTypesData()[accessTypeDetailIndex].applications.length }} Total)</div>
-                            <div v-html="renderApplicationsTable(getAccessTypesData()[accessTypeDetailIndex].applications, 'accessTypes', 'applications', true)"></div>
+                            <div class="card-header">
+                                <span>Applications ({{ getAccessTypesData()[accessTypeDetailIndex].applications.length }} Total)</span>
+                                <button class="btn btn-secondary" @click="showHumanReadableApplications.accessTypes = !showHumanReadableApplications.accessTypes" style="margin-left: auto;">
+                                    {{ showHumanReadableApplications.accessTypes ? 'Show Raw' : 'Show Readable' }}
+                                </button>
+                            </div>
+                            <div v-html="renderApplicationsTable(getAccessTypesData()[accessTypeDetailIndex].applications, 'accessTypes', 'applications', showHumanReadableApplications.accessTypes, true)"></div>
                         </div>
                     </div>
                 </div>
@@ -312,7 +327,12 @@
                 <!-- Applications Tab -->
                 <div class="tab-content" v-show="currentTab === 'applications'">
                     <div class="card" v-show="applicationDetailIndex === null">
-                        <div class="card-header">Application Usage Analysis</div>
+                        <div class="card-header">
+                            <span>Application Usage Analysis</span>
+                            <button class="btn btn-secondary" @click="showHumanReadableApplications.applications = !showHumanReadableApplications.applications" style="margin-left: auto;">
+                                {{ showHumanReadableApplications.applications ? 'Show Raw' : 'Show Readable' }}
+                            </button>
+                        </div>
                         <div v-html="renderApplicationsOverviewTable()"></div>
                     </div>
 
